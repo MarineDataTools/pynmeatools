@@ -15,11 +15,16 @@ import time
 import argparse
 import io # python3 file isinstance
 
-logger = logging.getLogger('NMEA0183logger')
+logger = logging.getLogger('nmea0183logger')
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
+#
+# TODO: 
+#
 
-class NMEA0183logger(object):
+
+
+class nmea0183logger(object):
     """
     """
     def __init__(self):
@@ -83,7 +88,7 @@ class NMEA0183logger(object):
                         nmea_data['time'] = ti
                         nmea_data['device'] = serial_device.name
                         nmea_data['nmea'] = nmea_sentence
-                        logger.debug(funcname + ':Read sentence:' + nmea_sentence)
+                        #logger.debug(funcname + ': device: '+ str(serial_device.port) + ' Read sentence:' + nmea_sentence)
                         for deque in self.deques:
                             deque.appendleft(nmea_data)
                             
@@ -167,7 +172,7 @@ class NMEA0183logger(object):
                         nmea_data['time'] = ti
                         nmea_data['device'] = serial_dict['address'] + ':' + str(serial_dict['port'])
                         nmea_data['nmea'] = nmea_sentence
-                        logger.debug(funcname + ':Read sentence:' + nmea_sentence)
+                        #logger.debug(funcname + ':Read sentence:' + nmea_sentence)
                         for deque in self.deques:
                             deque.appendleft(nmea_data)
                             
@@ -222,7 +227,7 @@ class NMEA0183logger(object):
             ind_datafile = datafile
             logger.debug(funcname + ': got ind, thats easy' )
             found_file = True
-        elif(isinstance(datafile,io.IOBase)): # python 3 file type check
+        else:
             logger.debug(funcname + ': File object, searching for the file' )
             found_file = False
             for ind_datafile,dfile in enumerate(self.datafiles):
@@ -236,7 +241,10 @@ class NMEA0183logger(object):
             self.datafiles[ind_datafile]['thread_queue'].put('stop')
             # Waiting for closing
             time.sleep(0.05)
-        
+        else:
+            logger.warning(funcname + ': Could not close file: '+str(datafile) )
+            print(self.datafiles)
+            
 
     def save_nmea_sentences(self,datafile, deque, thread_queue, style):
         """
@@ -285,9 +293,16 @@ class NMEA0183logger(object):
         funcname = self.__class__.__name__ + '.log_data_in_files()'
         logger.debug(funcname)
         thread_queue = queue.Queue()
-        self.time_thread = threading.Thread(target=self.time_interval_thread, args = (filename,time_interval,thread_queue))
-        self.time_thread.daemon = True
-        self.time_thread.start()
+        # If time interval is larger than 10 seconds, create with time interval new files, otherwise only one file
+        if(time_interval > datetime.timedelta(seconds=9.9999)):
+            logger.debug(funcname + ': Starting thread to create every ' +str(time_interval) + ' a new file')
+            self.time_thread = threading.Thread(target=self.time_interval_thread, args = (filename,time_interval,thread_queue))
+            self.time_thread.daemon = True
+            self.time_thread.start()
+        else:
+            logger.debug(funcname + ': Creating file and logging data to ' + filename)            
+            datafile = self.add_file_to_save(filename)
+            
 
         
     def time_interval_thread(self,filename,time_interval,thread_queue):
@@ -297,22 +312,26 @@ class NMEA0183logger(object):
 
         """
         funcname = self.__class__.__name__ + '.time_interval_thread()'
-        dt = 0.05
+        dt = 1.0
         logger.debug(funcname)
         now = datetime.datetime.now()
-        filename_time = now.strftime(filename + '%Y.%m.%d__%H.%M.%S.log')
+        filename_time = now.strftime(filename + '__%Y%m%d_%H%M%S.log')
         datafile = self.add_file_to_save(filename_time)
         tstart = now
     
         while True:
-            now = datetime.datetime.now()                        
+            time.sleep(dt)            
+            now = datetime.datetime.now()
+            logger.debug(funcname + ': Test time interval thread:' + str(now) +' ' + str(tstart) + ' ' + str(time_interval))            
             if((now - tstart) > time_interval):
-                tstart = now            
+                logger.debug(funcname + ': Time interval thread:' + str(now) +' ' + str(tstart) + ' ' + str(time_interval))
+                tstart = now
                 logger.debug(funcname + ': Creating new file')
                 self.close_file_to_save(datafile)
-                filename_time = now.strftime(filename + '%Y.%m.%d__%H.%M.%S.log')
+                time.sleep(0.01)
+                filename_time = now.strftime(filename + '__%Y%m%d_%H%M%S.log')
                 datafile = self.add_file_to_save(filename_time)
-                time.sleep(dt)
+                time.sleep(0.01)                
 
             # Try to read from the queue, if something was read, quit
             try:
@@ -330,13 +349,15 @@ def main():
     Main routine
 
     """
-
+    serial_help = 'Serial device to read data from in unixoid OSes e.g. /dev/ttyACM0'
+    interval_help = 'Time interval at which new files are created (in seconds)'
     parser = argparse.ArgumentParser()
     parser.add_argument('--log_stream', '-l')
     parser.add_argument('--filename', '-f')
-    parser.add_argument('--serial_device', '-s')
+    parser.add_argument('--serial_device', '-s', nargs='+', action='append', help=serial_help)
     parser.add_argument('--address', '-a')
-    parser.add_argument('--port', '-p')    
+    parser.add_argument('--port', '-p')
+    parser.add_argument('--interval', '-i', default=0, type=int, help=interval_help)        
     parser.add_argument('--verbose', '-v', action='count')
     args = parser.parse_args()
     
@@ -349,23 +370,26 @@ def main():
 
     logger.setLevel(loglevel)
 
-    # Create a NMEAGrabber
+    time_interval = args.interval
+    # Create a nmeaGrabber
     print('hallo')
-    s = NMEA0183Grabber()
+    s = nmea0183logger()
     try:
         filename = args.filename
         print(filename)
-        s.log_data_in_files(filename,datetime.timedelta(seconds=86400))
+        s.log_data_in_files(filename,datetime.timedelta(seconds=time_interval))
     except Exception as e:
-        logger.debug('main(): no filename given')
+        logger.debug('main(): ' + str(e))
 
-
-    serial_device = args.serial_device
-    if(serial_device != None):
-        try:
-            s.add_serial_device(serial_device)
-        except Exception as e:
-            logger.debug('main():',e)
+    logger.debug('main(): ' + str(args.serial_device))
+    #serial_device = args.serial_device
+    for serial_device in args.serial_device:
+        serial_device = serial_device[0]
+        if(serial_device != None):
+            try:
+                s.add_serial_device(serial_device)
+            except Exception as e:
+                logger.debug('main():',e)
 
 
     try:
@@ -382,5 +406,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    #NMEA0183logger --address 192.168.236.72 -p 10007 -f test_peter -v -v -v
+    #pynmea0183logger --address 192.168.236.72 -p 10007 -f test_peter -v -v -v
+    #pynmea0183logger --serial_device /dev/ttyACM0 -f test_peter -v -v -v
 

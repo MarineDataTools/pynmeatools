@@ -14,6 +14,6 @@ setup(name='pynmeatools',
       license='GPLv03',
       packages=['pynmeatools'],
       scripts = [],
-      entry_points={ 'console_scripts': ['NMEA0183logger=pynmeatools.NMEA0183logger:main',] },
+      entry_points={ 'console_scripts': ['pynmea0183logger=pynmeatools.nmea0183logger:main',] },
       package_data = {'':['VERSION']},
       zip_safe=False)

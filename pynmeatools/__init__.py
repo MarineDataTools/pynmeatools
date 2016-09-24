@@ -1,1 +1,1 @@
-import NMEA0183logger.py
+import nmea0183logger
