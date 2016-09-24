@@ -13,7 +13,6 @@ import datetime
 import collections
 import time
 import argparse
-import io # python3 file isinstance
 
 logger = logging.getLogger('nmea0183logger')
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
@@ -312,7 +311,7 @@ class nmea0183logger(object):
 
         """
         funcname = self.__class__.__name__ + '.time_interval_thread()'
-        dt = 1.0
+        dt = .1
         logger.debug(funcname)
         now = datetime.datetime.now()
         filename_time = now.strftime(filename + '__%Y%m%d_%H%M%S.log')
@@ -322,7 +321,6 @@ class nmea0183logger(object):
         while True:
             time.sleep(dt)            
             now = datetime.datetime.now()
-            logger.debug(funcname + ': Test time interval thread:' + str(now) +' ' + str(tstart) + ' ' + str(time_interval))            
             if((now - tstart) > time_interval):
                 logger.debug(funcname + ': Time interval thread:' + str(now) +' ' + str(tstart) + ' ' + str(time_interval))
                 tstart = now
