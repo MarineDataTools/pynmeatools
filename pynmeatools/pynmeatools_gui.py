@@ -13,8 +13,15 @@ import datetime
 import collections
 import time
 import argparse
-import pynmeatools
 import glob
+import pynmeatools
+
+
+# TODO
+# Implement this here
+# http://stackoverflow.com/questions/24469662/how-to-redirect-logger-output-into-pyqt-text-widget
+#
+#
 
 
 # Import qt
@@ -73,6 +80,48 @@ def serial_ports():
 
 
 
+class serialWidget(QWidget):
+    """
+    A widget for serial connections
+    """
+    def __init__(self):
+        funcname = self.__class__.__name__ + '.___init__()'
+        self.__version__ = pynmeatools.__version__
+        # Do the rest
+        QWidget.__init__(self)
+
+        layout = QGridLayout(self)
+
+        self._combo_serial_devices = QComboBox(self)
+        self._combo_serial_baud = QComboBox(self)
+        self._test_serial_ports()
+
+        layout.addWidget(self._combo_serial_devices,0,0)
+        layout.addWidget(self._combo_serial_baud,0,1)        
+
+        
+    def _test_serial_ports(self):
+        """
+        
+        Look for serial ports
+
+        """
+        funcname = self.__class__.__name__ + '._test_serial_ports()'        
+        ports = serial_ports()
+        # This could be used to pretest devices
+        #ports_good = self.test_device_at_serial_ports(ports)
+        ports_good = ports
+        logger.debug(funcname + ': ports:' + str(ports_good))
+        self._combo_serial_devices.clear()
+        for port in ports_good:
+            self._combo_serial_devices.addItem(str(port))                
+
+
+#
+#
+# The main gui
+#
+#
 class guiMain(QMainWindow):
     """
 
@@ -82,6 +131,8 @@ class guiMain(QMainWindow):
     def __init__(self):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
+        # Add a logger object
+        self.nmea0183logger = pynmeatools.nmea0183logger.nmea0183logger()
         # Do the rest
         QWidget.__init__(self)
         # Create the menu
@@ -97,31 +148,25 @@ class guiMain(QMainWindow):
         mainlayout = QGridLayout(mainwidget)
 
 
-        self._combo_serial = QComboBox(self)
+        self._serial_widget = serialWidget()
+        self._serial_widget._test_serial_ports()
 
-        mainlayout.addWidget(self._combo_serial,0,0)
+        self._button_log = QPushButton('Show log')
+        self._combo_loglevel = QComboBox()
+
+        # Layout
+        mainlayout.addWidget(self._serial_widget,0,0)
+        mainlayout.addWidget(QLabel('Status'),1,0)
+
+        mainlayout.addWidget(self._button_log,0,1)
+        mainlayout.addWidget(self._combo_loglevel,0,2)
 
 
-        self._test_serial_ports()
         # Focus 
         mainwidget.setFocus()
         self.setCentralWidget(mainwidget)
 
-    def _test_serial_ports(self):
-        """
-        
-        Look for serial ports
 
-        """
-        funcname = self.__class__.__name__ + '._test_serial_ports()'        
-        ports = serial_ports()
-        # This could be used to pretest devices
-        #ports_good = self.test_device_at_serial_ports(ports)
-        ports_good = ports
-        logger.debug(funcname + ': ports:' + str(ports_good))
-        self._combo_serial.clear()
-        for port in ports_good:
-            self._combo_serial.addItem(str(port))        
 
     def _quit(self):
         try:

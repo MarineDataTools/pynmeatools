@@ -30,6 +30,7 @@ class nmea0183logger(object):
         """
         """
         funcname = self.__class__.__name__ + '.__init__()'
+        logger.debug(funcname)                    
         self.dequelen = 10000
         logger.debug(funcname)
         self.serial      = []
