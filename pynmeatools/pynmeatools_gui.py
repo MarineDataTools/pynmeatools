@@ -41,10 +41,15 @@ except:
 
 print(pynmeatools)
 
+logging.basicConfig(stream=sys.stderr)
 logger = logging.getLogger('pynmeatools_gui')
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+logger.setLevel(logging.DEBUG)
+
+pynmeatools.nmea0183logger.logger.setLevel(logging.DEBUG)
 
 
+logger.info('HALLO')
+logger.debug('HALLO')
 
 def serial_ports():
     """ Lists serial port names
@@ -82,22 +87,29 @@ def serial_ports():
 
 class serialWidget(QWidget):
     """
-    A widget for serial connections
+    A widget for serial connections of 
     """
-    def __init__(self):
+    def __init__(self,nmea0183logger):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
+        self.nmea0183logger = nmea0183logger
         # Do the rest
         QWidget.__init__(self)
 
         layout = QGridLayout(self)
-
+        # Serial baud rates
+        baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
         self._combo_serial_devices = QComboBox(self)
         self._combo_serial_baud = QComboBox(self)
+        for b in baud:
+            self._combo_serial_baud.addItem(str(b))        
+        self._button_serial_openclose = QPushButton('Open')
+        self._button_serial_openclose.clicked.connect(self._openclose)
         self._test_serial_ports()
 
         layout.addWidget(self._combo_serial_devices,0,0)
-        layout.addWidget(self._combo_serial_baud,0,1)        
+        layout.addWidget(self._combo_serial_baud,0,1)
+        layout.addWidget(self._button_serial_openclose,0,2)
 
         
     def _test_serial_ports(self):
@@ -114,8 +126,47 @@ class serialWidget(QWidget):
         logger.debug(funcname + ': ports:' + str(ports_good))
         self._combo_serial_devices.clear()
         for port in ports_good:
-            self._combo_serial_devices.addItem(str(port))                
+            self._combo_serial_devices.addItem(str(port))
 
+            
+    def _openclose(self):
+        """
+
+        Opening or closing a serial device
+
+        """
+        funcname = self.__class__.__name__ + '._openclose()'
+        print(funcname)
+        logger.debug(funcname)
+        port = str(self._combo_serial_devices.currentText())
+        ind = self._combo_serial_devices.currentIndex()
+        b = int(self._combo_serial_baud.currentText())
+        if(self.sender().text() == 'Open'):
+            logger.debug(funcname + ": Opening Serial port" + port)
+            ret = self.nmea0183logger.add_serial_device(port)
+            if(ret):
+                self._combo_serial_devices.removeItem(ind)
+
+                
+        elif(self.sender().text() == 'Close'):
+            pass
+
+    
+
+
+
+class deviceWidget(QWidget):
+    """
+    A widget for a NMEA device
+    """
+    def __init__(self,nmea0183loggerdevice=None):
+        funcname = self.__class__.__name__ + '.___init__()'
+        self.__version__ = pynmeatools.__version__
+        # Do the rest
+        QWidget.__init__(self)
+
+        layout = QGridLayout(self)
+        layout.addWidget(QLabel('Device'),0,0)        
 
 #
 #
@@ -148,9 +199,9 @@ class guiMain(QMainWindow):
         mainlayout = QGridLayout(mainwidget)
 
 
-        self._serial_widget = serialWidget()
-        self._serial_widget._test_serial_ports()
+        self._serial_widget = serialWidget(self.nmea0183logger)
 
+        
         self._button_log = QPushButton('Show log')
         self._combo_loglevel = QComboBox()
 

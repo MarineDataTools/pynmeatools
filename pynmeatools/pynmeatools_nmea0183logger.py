@@ -46,15 +46,28 @@ class nmea0183logger(object):
             logger.debug(funcname + ': Opening: ' + port)            
             serial_dict = {}
             serial_dict['sentences_read'] = 0
+            serial_dict['bytes_read'] = 0
+            serial_dict['port']       = port
             serial_dict['device']       = serial.Serial(port,baud)
             serial_dict['thread_queue'] = queue.Queue()
             serial_dict['thread']       = threading.Thread(target=self.read_nmea_sentences_serial,args = (serial_dict,))
             serial_dict['thread'].daemon = True
             serial_dict['thread'].start()
             self.serial.append(serial_dict)
+            return True
         except Exception as e:
             logger.debug(funcname + ': Exception: ' + str(e))            
             logger.debug(funcname + ': Could not open device at: ' + str(port))
+            return False
+
+
+    def rem_serial_device(self,ind):
+        """
+
+        Removes a serial item
+
+        """
+        pass
 
         
 
@@ -74,9 +87,11 @@ class nmea0183logger(object):
         while True:
             time.sleep(0.05)
             while(serial_device.inWaiting()):
+                # TODO, this could be made much faster ... 
                 try:
                     value = serial_device.read(1).decode('utf-8')
                     nmea_sentence += value
+                    serial_dict['bytes_read'] += 1
                     if(value == '$'):
                         got_dollar = True
                         # Get the time
