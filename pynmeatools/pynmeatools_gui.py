@@ -84,33 +84,104 @@ def serial_ports():
     return result
 
 
+class deviceWidget(QWidget):
+    """
+    A widget for a single NMEA device in a nmea0183logger
+    """
+    def __init__(self, ind_device=0, parent_gui = None,dequelen = 100000):
+        funcname = self.__class__.__name__ + '.___init__()'
+        self.__version__ = pynmeatools.__version__
+        # Do the rest
+        self.dequelen = dequelen
+        QWidget.__init__(self)
+        self.nmea0183logger = parent_gui.nmea0183logger
+        self.serial = self.nmea0183logger.serial[ind_device]
+        self.data_deque = collections.deque(maxlen=self.dequelen) # Get the data from nmealogger
+        self.identifiers = []
+        self.num_identifiers = []        
+        self.serial['data_queues'].append(self.data_deque)
+        self._info_str = self.serial['port']
+        self._qlabel_info     = QLabel(self._info_str)
+        self._qlabel_bin      = QLabel('')
+        self._qlabel_sentence = QLabel('')
+
+        self._update_info()
+
+        self._button_raw_data = QPushButton('Raw data')
+        layout = QGridLayout(self)
+        layout.addWidget(self._qlabel_info,0,0)
+        layout.addWidget(self._qlabel_bin,1,0)
+        layout.addWidget(self._qlabel_sentence,2,0)        
+        layout.addWidget(self._button_raw_data,3,0)
+        
+        
+    def _new_data(self):
+        """
+        Function called as a signal when new data arrives
+        """
+        funcname = self.__class__.__name__ + '._new_data()'
+        self._update_info()        
+        print('Hallo new data!')
+
+    def _update_info(self):
+        print('Update')        
+        if( self.nmea0183logger != None ):
+            self._bin_str = 'Bytes read ' + str(self.serial['bytes_read'])
+            self._sentence_str = 'NMEA sets read ' + str(self.serial['sentences_read'])
+            self._qlabel_bin.setText(self._bin_str)
+            self._qlabel_sentence.setText(self._sentence_str)
+
+
+        while(len(self.data_deque) > 0):
+            raw_data = self.data_deque.pop()
+            #print('Got: ' + str(raw_data))
+            data = pynmeatools.parse(raw_data['nmea'])
+            # Check for new identifiers
+            if(data != None):
+                ident = data.identifier()
+                try:
+                    ind = self.identifiers.index(ident)
+                    self.num_identifiers[ind] += 1
+                except:
+                    self.identifiers.append(ident)
+                    self.num_identifiers.append(0)
+                    
+                #if not ident in self.identifiers:
+
+                print(self.identifiers)
+                print(self.num_identifiers)
+
 
 class serialWidget(QWidget):
     """
     A widget for serial connections of 
     """
-    def __init__(self,nmea0183logger):
+    def __init__(self,parent_gui):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
-        self.nmea0183logger = nmea0183logger
+        self.parent_gui = parent_gui
+        self.nmea0183logger = parent_gui.nmea0183logger
+        self.emit_signals = []
         # Do the rest
         QWidget.__init__(self)
-
+        
         layout = QGridLayout(self)
         # Serial baud rates
         baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
         self._combo_serial_devices = QComboBox(self)
         self._combo_serial_baud = QComboBox(self)
         for b in baud:
-            self._combo_serial_baud.addItem(str(b))        
+            self._combo_serial_baud.addItem(str(b))
+
+        self._combo_serial_baud.setCurrentIndex(4)
         self._button_serial_openclose = QPushButton('Open')
         self._button_serial_openclose.clicked.connect(self._openclose)
         self._test_serial_ports()
-
+        
         layout.addWidget(self._combo_serial_devices,0,0)
         layout.addWidget(self._combo_serial_baud,0,1)
         layout.addWidget(self._button_serial_openclose,0,2)
-
+        
         
     def _test_serial_ports(self):
         """
@@ -118,7 +189,7 @@ class serialWidget(QWidget):
         Look for serial ports
 
         """
-        funcname = self.__class__.__name__ + '._test_serial_ports()'        
+        funcname = self.__class__.__name__ + '._test_serial_ports()'
         ports = serial_ports()
         # This could be used to pretest devices
         #ports_good = self.test_device_at_serial_ports(ports)
@@ -127,8 +198,8 @@ class serialWidget(QWidget):
         self._combo_serial_devices.clear()
         for port in ports_good:
             self._combo_serial_devices.addItem(str(port))
-
             
+        
     def _openclose(self):
         """
 
@@ -146,27 +217,23 @@ class serialWidget(QWidget):
             ret = self.nmea0183logger.add_serial_device(port)
             if(ret):
                 self._combo_serial_devices.removeItem(ind)
+                # Create a new device widget
+                ind_serial = len(self.nmea0183logger.serial) - 1
+                dV = deviceWidget(ind_device = ind_serial,parent_gui = self.parent_gui)
+                self.parent_gui._add_device(dV)
+                self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)
 
                 
         elif(self.sender().text() == 'Close'):
             pass
 
-    
+
+        # Call all the functions in self.emit_signals
+        for s in self.emit_signals:
+            s()
 
 
 
-class deviceWidget(QWidget):
-    """
-    A widget for a NMEA device
-    """
-    def __init__(self,nmea0183loggerdevice=None):
-        funcname = self.__class__.__name__ + '.___init__()'
-        self.__version__ = pynmeatools.__version__
-        # Do the rest
-        QWidget.__init__(self)
-
-        layout = QGridLayout(self)
-        layout.addWidget(QLabel('Device'),0,0)
 
 
 
@@ -196,26 +263,24 @@ class guiMain(QMainWindow):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
         # Add a logger object
-        print('q',pynmeatools.nmea0183logger)
-        print('a',pynmeatools.nmea0183logger.nmea0183logger)
         self.nmea0183logger = pynmeatools.nmea0183logger.nmea0183logger(loglevel=logging.DEBUG)
         # Do the rest
         QWidget.__init__(self)
         # Create the menu
         self.file_menu = QMenu('&File',self)
-
+        self.device_widgets = []
         #self.file_menu.addAction('&Settings',self.fileSettings,Qt.CTRL + Qt.Key_S)
         self.file_menu.addAction('&Quit',self._quit,Qt.CTRL + Qt.Key_Q)
         self.about_menu = QMenu('&About',self)
-        self.about_menu.addAction('&About',self._about)        
+        self.about_menu.addAction('&About',self._about)
         self.menuBar().addMenu(self.file_menu)
-        self.menuBar().addMenu(self.about_menu)        
+        self.menuBar().addMenu(self.about_menu)
         mainwidget = QWidget(self)
         mainlayout = QGridLayout(mainwidget)
-
-
-        self._serial_widget = serialWidget(self.nmea0183logger)
-
+        
+        
+        self._serial_widget = serialWidget(self)
+        
         
         self._button_log = QPushButton('Show log')
         self._button_log.clicked.connect(self._log_widget)
@@ -223,22 +288,36 @@ class guiMain(QMainWindow):
         self._combo_loglevel.addItem('Debug')
         self._combo_loglevel.addItem('Info')
         self._combo_loglevel.addItem('Warning')
-
+        
+        
+        # A table to add all the serial devices
+        self._widget_devices = QWidget(self)
+        self._layout_devices = QHBoxLayout(self._widget_devices)
         # Layout
         mainlayout.addWidget(self._serial_widget,0,0)
-        mainlayout.addWidget(QLabel('Status'),1,0)
-
         mainlayout.addWidget(self._button_log,0,1)
         mainlayout.addWidget(self._combo_loglevel,0,2)
 
+        mainlayout.addWidget(self._widget_devices,1,0,2,3)
 
         # Focus 
         mainwidget.setFocus()
         self.setCentralWidget(mainwidget)
 
+
+    def _add_device(self,device):
+        """
+        
+        Adds a new deviceWidget
+        
+        """
+        self.device_widgets.append(device)
+        self._layout_devices.addWidget(device)        
+        
+        
     def _log_widget(self):
         """
-        A widget 
+        A widget of log data
         """
 
         self._log_text = QPlainTextEdit()
@@ -255,6 +334,16 @@ class guiMain(QMainWindow):
         self._log_text.show()
         print('hallo!')
         logger.info('hallo')
+
+
+    def _something_changed(self):
+        """
+        """
+        funcname = self.__class__.__name__ + '._something_changed()'        
+        self.logger.debug(funcname)
+
+        
+    
         
 
 

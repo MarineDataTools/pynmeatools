@@ -13,11 +13,35 @@ import datetime
 import collections
 import time
 import argparse
+import pynmea2
 
 logger = logging.getLogger('pynmeatool_nmea0183logger.py')
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)        
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
 
+# TODO: This should be somewhere else
+def parse(msg):
+    """
+    Function to parse a nmeadataset
+    Input:
+       msg: NMEA data str
+    """
+    ind = msg.find('$')
+    #print(msg[ind:])
+    # There is data before, lets test if its some sort of date/device string
+    if(ind > 0):
+        pass
+    
+    try:
+        data = pynmea2.parse(msg[ind:])
+        #
+        return data
+
+
+    except ValueError:
+        print('Could not parse data: ' + str(msg))
+        return None
+    
 
 class nmea0183logger(object):
     """
@@ -38,7 +62,7 @@ class nmea0183logger(object):
     def add_serial_device(self,port,baud=4800):
         """
         """
-        funcname = '.add_serial_device()'
+        funcname = 'add_serial_device()'
         try:
             self.logger.debug(funcname + ': Opening: ' + port)            
             serial_dict = {}
@@ -47,6 +71,8 @@ class nmea0183logger(object):
             serial_dict['port']       = port
             serial_dict['device']       = serial.Serial(port,baud)
             serial_dict['thread_queue'] = queue.Queue()
+            serial_dict['data_queues']  = []
+            serial_dict['data_signals']  = []            
             serial_dict['thread']       = threading.Thread(target=self.read_nmea_sentences_serial,args = (serial_dict,))
             serial_dict['thread'].daemon = True
             serial_dict['thread'].start()
@@ -103,6 +129,13 @@ class nmea0183logger(object):
                         #self.logger.debug(funcname + ': device: '+ str(serial_device.port) + ' Read sentence:' + nmea_sentence)
                         for deque in self.deques:
                             deque.appendleft(nmea_data)
+                            
+                        for deque in serial_dict['data_queues']:
+                            deque.appendleft(nmea_data)
+
+                        # Call signal functions for new data
+                        for s in serial_dict['data_signals']:
+                            s()
                             
                         nmea_sentence = ''
                         serial_dict['sentences_read'] += 1
