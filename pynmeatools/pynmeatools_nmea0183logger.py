@@ -14,25 +14,22 @@ import collections
 import time
 import argparse
 
-logger = logging.getLogger('nmea0183logger')
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)
-
-#
-# TODO: 
-#
+logger = logging.getLogger('pynmeatool_nmea0183logger.py')
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)        
 
 
 
 class nmea0183logger(object):
     """
     """
-    def __init__(self):
+    def __init__(self,loglevel=logging.INFO):
         """
         """
-        funcname = self.__class__.__name__ + '.__init__()'
-        logger.debug(funcname)                    
+        funcname =  '__init__()'
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(loglevel)
+        self.logger.debug(funcname)                    
         self.dequelen = 10000
-        logger.debug(funcname)
         self.serial      = []
         self.datafiles   = []        
         self.deques      = []
@@ -41,9 +38,9 @@ class nmea0183logger(object):
     def add_serial_device(self,port,baud=4800):
         """
         """
-        funcname = self.__class__.__name__ + '.add_serial_device()'
+        funcname = '.add_serial_device()'
         try:
-            logger.debug(funcname + ': Opening: ' + port)            
+            self.logger.debug(funcname + ': Opening: ' + port)            
             serial_dict = {}
             serial_dict['sentences_read'] = 0
             serial_dict['bytes_read'] = 0
@@ -56,8 +53,8 @@ class nmea0183logger(object):
             self.serial.append(serial_dict)
             return True
         except Exception as e:
-            logger.debug(funcname + ': Exception: ' + str(e))            
-            logger.debug(funcname + ': Could not open device at: ' + str(port))
+            self.logger.debug(funcname + ': Exception: ' + str(e))            
+            self.logger.debug(funcname + ': Could not open device at: ' + str(port))
             return False
 
 
@@ -79,7 +76,7 @@ class nmea0183logger(object):
         thread_queue: For stopping the thread
         """
         
-        funcname = self.__class__.__name__ + '.read_nmea_sentences()'
+        funcname = 'read_nmea_sentences()'
         serial_device = serial_dict['device']
         thread_queue = serial_dict['thread_queue']
         nmea_sentence = ''
@@ -103,7 +100,7 @@ class nmea0183logger(object):
                         nmea_data['time'] = ti
                         nmea_data['device'] = serial_device.name
                         nmea_data['nmea'] = nmea_sentence
-                        #logger.debug(funcname + ': device: '+ str(serial_device.port) + ' Read sentence:' + nmea_sentence)
+                        #self.logger.debug(funcname + ': device: '+ str(serial_device.port) + ' Read sentence:' + nmea_sentence)
                         for deque in self.deques:
                             deque.appendleft(nmea_data)
                             
@@ -111,13 +108,13 @@ class nmea0183logger(object):
                         serial_dict['sentences_read'] += 1
 
                 except Exception as e:
-                    logger.debug(funcname + ':Exception:' + str(e))
+                    self.logger.debug(funcname + ':Exception:' + str(e))
 
                     
             # Try to read from the queue, if something was read, quit
             try:
                 data = thread_queue.get(block=False)
-                logger.debug(funcname + ': Got data:' + data)
+                self.logger.debug(funcname + ': Got data:' + data)
                 break
             except queue.Empty:
                 pass
@@ -128,10 +125,10 @@ class nmea0183logger(object):
     def add_tcp_stream(self,address,port):
         """
         """
-        funcname = self.__class__.__name__ + '.add_tcp_stream()'
+        funcname = 'add_tcp_stream()'
         # Create a TCP/IP socket
         try:
-            logger.debug(funcname + ': Opening TCP socket: ' + address + ' ' + str(port))
+            self.logger.debug(funcname + ': Opening TCP socket: ' + address + ' ' + str(port))
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((address, port))
             sock.setblocking(0) # Nonblocking
@@ -147,7 +144,7 @@ class nmea0183logger(object):
             print('1')            
             self.serial.append(serial_dict)            
         except Exception as e:
-            logger.debug(funcname + ': Exception: ' + str(e))
+            self.logger.debug(funcname + ': Exception: ' + str(e))
 
 
     def read_nmea_sentences_tcp(self, serial_dict):
@@ -158,7 +155,7 @@ class nmea0183logger(object):
 
         """
         
-        funcname = self.__class__.__name__ + '.read_nmea_sentences_tcp()'
+        funcname = 'read_nmea_sentences_tcp()'
         serial_device = serial_dict['device']
         thread_queue = serial_dict['thread_queue']
         nmea_sentence = ''
@@ -187,7 +184,7 @@ class nmea0183logger(object):
                         nmea_data['time'] = ti
                         nmea_data['device'] = serial_dict['address'] + ':' + str(serial_dict['port'])
                         nmea_data['nmea'] = nmea_sentence
-                        #logger.debug(funcname + ':Read sentence:' + nmea_sentence)
+                        #self.logger.debug(funcname + ':Read sentence:' + nmea_sentence)
                         for deque in self.deques:
                             deque.appendleft(nmea_data)
                             
@@ -198,7 +195,7 @@ class nmea0183logger(object):
             # Try to read from the queue, if something was read, quit
             try:
                 data = thread_queue.get(block=False)
-                logger.debug(funcname + ': Got data:' + data)
+                self.logger.debug(funcname + ': Got data:' + data)
                 break
             except queue.Empty:
                 pass
@@ -211,7 +208,7 @@ class nmea0183logger(object):
         Adds a file to save the data to
         """
         
-        funcname = self.__class__.__name__ + '.add_file_to_save()'
+        funcname = 'add_file_to_save()'
         
         try:
             datafile_dict = {}
@@ -225,10 +222,10 @@ class nmea0183logger(object):
             datafile_dict['file_thread'].daemon = True
             datafile_dict['file_thread'].start()
             self.datafiles.append(datafile_dict)
-            logger.debug(funcname + ': opened file: ' + filename)
+            self.logger.debug(funcname + ': opened file: ' + filename)
             return datafile_dict['datafile']
         except Exception as e:
-            logger.warning(funcname + ': Excpetion: ' + str(e))
+            self.logger.warning(funcname + ': Excpetion: ' + str(e))
             return None
 
             
@@ -237,17 +234,17 @@ class nmea0183logger(object):
         Closes the thread and the file to save data to
         input: datafile: can be either an integer or a file object 
         """
-        funcname = self.__class__.__name__ + '.close_file_to_save()'
+        funcname = 'close_file_to_save()'
         if(isinstance(datafile,int)):
             ind_datafile = datafile
-            logger.debug(funcname + ': got ind, thats easy' )
+            self.logger.debug(funcname + ': got ind, thats easy' )
             found_file = True
         else:
-            logger.debug(funcname + ': File object, searching for the file' )
+            self.logger.debug(funcname + ': File object, searching for the file' )
             found_file = False
             for ind_datafile,dfile in enumerate(self.datafiles):
                 if(dfile['datafile'] == datafile):
-                    logger.debug(funcname + ': Found file object at index:' + str(ind_datafile))
+                    self.logger.debug(funcname + ': Found file object at index:' + str(ind_datafile))
                     found_file = True
                     break
 
@@ -257,7 +254,7 @@ class nmea0183logger(object):
             # Waiting for closing
             time.sleep(0.05)
         else:
-            logger.warning(funcname + ': Could not close file: '+str(datafile) )
+            self.logger.warning(funcname + ': Could not close file: '+str(datafile) )
             print(self.datafiles)
             
 
@@ -265,7 +262,7 @@ class nmea0183logger(object):
         """
         Saves the nmea into a file
         """
-        funcname = self.__class__.__name__ + '.save_nmea_sentences()'
+        funcname = 'save_nmea_sentences()'
         ct = 0
         dt = 0.05
         while True:
@@ -286,12 +283,12 @@ class nmea0183logger(object):
                 datafile.write(write_str)                    
             if(ct >= 10): # Sync the file every now and then
                 ct = 0
-                logger.debug(funcname + ': flushing')
+                self.logger.debug(funcname + ': flushing')
                 datafile.flush()
             # Try to read from the queue, if something was read, quit
             try:
                 data = thread_queue.get(block=False)
-                logger.debug(funcname + ': Got data:' + data)
+                self.logger.debug(funcname + ': Got data:' + data)
                 datafile.close()
                 break
             except queue.Empty:
@@ -305,17 +302,17 @@ class nmea0183logger(object):
         filename: 
         time_interval: datetime.timedelta object, default: datetime.timedelta(hours=1)
         """
-        funcname = self.__class__.__name__ + '.log_data_in_files()'
-        logger.debug(funcname)
+        funcname = 'log_data_in_files()'
+        self.logger.debug(funcname)
         thread_queue = queue.Queue()
         # If time interval is larger than 10 seconds, create with time interval new files, otherwise only one file
         if(time_interval > datetime.timedelta(seconds=9.9999)):
-            logger.debug(funcname + ': Starting thread to create every ' +str(time_interval) + ' a new file')
+            self.logger.debug(funcname + ': Starting thread to create every ' +str(time_interval) + ' a new file')
             self.time_thread = threading.Thread(target=self.time_interval_thread, args = (filename,time_interval,thread_queue))
             self.time_thread.daemon = True
             self.time_thread.start()
         else:
-            logger.debug(funcname + ': Creating file and logging data to ' + filename)            
+            self.logger.debug(funcname + ': Creating file and logging data to ' + filename)            
             datafile = self.add_file_to_save(filename)
             
 
@@ -326,9 +323,9 @@ class nmea0183logger(object):
         
 
         """
-        funcname = self.__class__.__name__ + '.time_interval_thread()'
+        funcname = 'time_interval_thread()'
         dt = .1
-        logger.debug(funcname)
+        self.logger.debug(funcname)
         now = datetime.datetime.now()
         filename_time = now.strftime(filename + '__%Y%m%d_%H%M%S.log')
         datafile = self.add_file_to_save(filename_time)
@@ -338,9 +335,9 @@ class nmea0183logger(object):
             time.sleep(dt)            
             now = datetime.datetime.now()
             if((now - tstart) > time_interval):
-                logger.debug(funcname + ': Time interval thread:' + str(now) +' ' + str(tstart) + ' ' + str(time_interval))
+                self.logger.debug(funcname + ': Time interval thread:' + str(now) +' ' + str(tstart) + ' ' + str(time_interval))
                 tstart = now
-                logger.debug(funcname + ': Creating new file')
+                self.logger.debug(funcname + ': Creating new file')
                 self.close_file_to_save(datafile)
                 time.sleep(0.01)
                 filename_time = now.strftime(filename + '__%Y%m%d_%H%M%S.log')
@@ -350,7 +347,7 @@ class nmea0183logger(object):
             # Try to read from the queue, if something was read, quit
             try:
                 data = thread_queue.get(block=False)
-                logger.debug(funcname + ': Got data:' + data)
+                self.logger.debug(funcname + ': Got data:' + data)
                 datafile.close()
                 break
             except queue.Empty:
@@ -386,8 +383,8 @@ def main():
 
     time_interval = args.interval
     # Create a nmeaGrabber
-    print('hallo')
-    s = nmea0183logger()
+    print('hallo Creating a logger')
+    s = nmea0183logger(loglevel=logging.DEBUG)
     try:
         filename = args.filename
         print(filename)
@@ -397,13 +394,14 @@ def main():
 
     logger.debug('main(): ' + str(args.serial_device))
     #serial_device = args.serial_device
-    for serial_device in args.serial_device:
-        serial_device = serial_device[0]
-        if(serial_device != None):
-            try:
-                s.add_serial_device(serial_device)
-            except Exception as e:
-                logger.debug('main():',e)
+    if(args.serial_device != None):
+        for serial_device in args.serial_device:
+            serial_device = serial_device[0]
+            if(serial_device != None):
+                try:
+                    s.add_serial_device(serial_device)
+                except Exception as e:
+                    logger.debug('main():',e)
 
 
     try:

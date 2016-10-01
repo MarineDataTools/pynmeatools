@@ -166,7 +166,20 @@ class deviceWidget(QWidget):
         QWidget.__init__(self)
 
         layout = QGridLayout(self)
-        layout.addWidget(QLabel('Device'),0,0)        
+        layout.addWidget(QLabel('Device'),0,0)
+
+
+
+class QtPlainTextLoggingHandler(logging.Handler):
+
+    def __init__(self,qtplaintextedit):
+        logging.Handler.__init__(self)
+        self.qtplaintextedit = qtplaintextedit
+
+    def emit(self, record):
+        record = self.format(record)
+        #XStream.stdout().write("{}\n".format(record))
+        self.qtplaintextedit.insertPlainText("{}\n".format(record))
 
 #
 #
@@ -183,7 +196,9 @@ class guiMain(QMainWindow):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
         # Add a logger object
-        self.nmea0183logger = pynmeatools.nmea0183logger.nmea0183logger()
+        print('q',pynmeatools.nmea0183logger)
+        print('a',pynmeatools.nmea0183logger.nmea0183logger)
+        self.nmea0183logger = pynmeatools.nmea0183logger.nmea0183logger(loglevel=logging.DEBUG)
         # Do the rest
         QWidget.__init__(self)
         # Create the menu
@@ -203,7 +218,11 @@ class guiMain(QMainWindow):
 
         
         self._button_log = QPushButton('Show log')
+        self._button_log.clicked.connect(self._log_widget)
         self._combo_loglevel = QComboBox()
+        self._combo_loglevel.addItem('Debug')
+        self._combo_loglevel.addItem('Info')
+        self._combo_loglevel.addItem('Warning')
 
         # Layout
         mainlayout.addWidget(self._serial_widget,0,0)
@@ -217,6 +236,26 @@ class guiMain(QMainWindow):
         mainwidget.setFocus()
         self.setCentralWidget(mainwidget)
 
+    def _log_widget(self):
+        """
+        A widget 
+        """
+
+        self._log_text = QPlainTextEdit()
+        self._log_widget = self._log_text        
+        handler = QtPlainTextLoggingHandler(self._log_text)
+        lformat='%(asctime)-15s:%(levelname)-8s:%(name)-20s:%(message)s'
+
+        # Adding the gui logger
+        handler.setFormatter(logging.Formatter(lformat))
+        logger.addHandler(handler)
+        # Adding the nmea0183 logger
+        self.nmea0183logger.logger.addHandler(handler)
+
+        self._log_text.show()
+        print('hallo!')
+        logger.info('hallo')
+        
 
 
     def _quit(self):
@@ -224,6 +263,11 @@ class guiMain(QMainWindow):
             self._about_label.close()
         except:
             pass
+
+        try:
+            self._log_widget.close()
+        except:
+            pass        
         
         self.close()
 
@@ -231,8 +275,9 @@ class guiMain(QMainWindow):
     def _about(self):
         about_str = '\n pynmeatools_gui \n'        
         about_str += '\n This is pynmeatools_gui: ' + self.__version__
-        about_str += '\n Copyright Peter Holtermann \n'
-        about_str += '\n peter.holtermann@io-warnemuende.de \n'        
+        about_str += '\n Written by Peter Holtermann \n'
+        about_str += '\n peter.holtermann@io-warnemuende.de \n'
+        about_str += '\n under the GPL v3 license \n'                
         self._about_label = QLabel(about_str)
         self._about_label.show()        
 
