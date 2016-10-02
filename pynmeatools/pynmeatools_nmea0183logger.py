@@ -93,13 +93,12 @@ class nmea0183logger(object):
         pass
 
         
-
     def read_nmea_sentences_serial(self, serial_dict):
         """
         The polling thread
         input:
-        serial_device: 
-        thread_queue: For stopping the thread
+            serial_dict: 
+            thread_queue: For stopping the thread
         """
         
         funcname = 'read_nmea_sentences()'
@@ -265,7 +264,8 @@ class nmea0183logger(object):
     def close_file_to_save(self,datafile):
         """
         Closes the thread and the file to save data to
-        input: datafile: can be either an integer or a file object 
+        input: 
+            datafile: can be either an integer or a file object 
         """
         funcname = 'close_file_to_save()'
         if(isinstance(datafile,int)):
@@ -314,10 +314,13 @@ class nmea0183logger(object):
                     write_str += data['nmea']
 
                 datafile.write(write_str)                    
-            if(ct >= 10): # Sync the file every now and then
+            if(ct >= 10): # Sync the file every now and then and show some information
                 ct = 0
                 self.logger.debug(funcname + ': flushing')
-                datafile.flush()
+                datafile.flush()                
+                info_str = self.serial_info()
+                self.logger.info(funcname + ':' + info_str)
+
             # Try to read from the queue, if something was read, quit
             try:
                 data = thread_queue.get(block=False)
@@ -326,6 +329,20 @@ class nmea0183logger(object):
                 break
             except queue.Empty:
                 pass
+            
+
+    def serial_info(self):
+        """
+        Creates an information string of the serial devices, the bytes and NMEA sentences read 
+        Returns:
+           info_str
+        """
+        info_str = ''
+        for s in self.serial:
+            info_str += s['port'] + ' ' + str(s['bytes_read']) + ' bytes '
+            info_str += str(s['sentences_read']) + ' NMEA sentences' + '\n'
+
+        return info_str
 
             
     def log_data_in_files(self, filename, time_interval):
@@ -349,7 +366,6 @@ class nmea0183logger(object):
             datafile = self.add_file_to_save(filename)
             
 
-        
     def time_interval_thread(self,filename,time_interval,thread_queue):
         """
 
@@ -403,7 +419,12 @@ def main():
     parser.add_argument('--port', '-p')
     parser.add_argument('--interval', '-i', default=0, type=int, help=interval_help)        
     parser.add_argument('--verbose', '-v', action='count')
+
     args = parser.parse_args()
+    # Print help and exit when no arguments are given
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit(1)
     
     if(args.verbose == None):
         loglevel = logging.CRITICAL
