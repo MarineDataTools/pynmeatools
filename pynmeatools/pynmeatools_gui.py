@@ -84,11 +84,35 @@ def serial_ports():
     return result
 
 
+
+class positionWidget(QWidget):
+    """
+    A widget for NMEA position datasets (GGA, GGL)
+    """
+    def __init__(self):
+        funcname = self.__class__.__name__ + '.___init__()'
+        self.__version__ = pynmeatools.__version__
+        QWidget.__init__(self)
+        layout = QGridLayout(self)
+        layout.addWidget(QLabel('Hallo!'),0,0)
+
+
+#
+#
+# NMEA device
+#
+# Connect NMEA sentences and widgets which can plot them
+plotwidgets = []
+plotwidgets.append(['GGA',positionWidget])        
+
 class deviceWidget(QWidget):
     """
     A widget for a single NMEA device in a nmea0183logger
     """
+    update_ident_widgets = pyqtSignal()    
     def __init__(self, ind_device=0, parent_gui = None,dequelen = 100000):
+        # Do the rest
+        QWidget.__init__(self)        
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
         # Do the rest
@@ -104,17 +128,17 @@ class deviceWidget(QWidget):
         self._qlabel_info     = QLabel(self._info_str)
         self._qlabel_bin      = QLabel('')
         self._qlabel_sentence = QLabel('')
-
+        self._qlabels_identifiers = []
         self._update_info()
         
         self._flag_show_raw_data = False
         self._button_raw_data = QPushButton('Raw data')
         self._button_raw_data.clicked.connect(self._show_raw_data)
-        layout = QGridLayout(self)
-        layout.addWidget(self._qlabel_info,0,0)
-        layout.addWidget(self._qlabel_bin,1,0)
-        layout.addWidget(self._qlabel_sentence,2,0)        
-        layout.addWidget(self._button_raw_data,3,0)
+        self.layout = QGridLayout(self)
+        self.layout.addWidget(self._qlabel_info,0,0)
+        self.layout.addWidget(self._qlabel_bin,1,0)
+        self.layout.addWidget(self._qlabel_sentence,2,0)        
+        self.layout.addWidget(self._button_raw_data,3,0)
         
         
     def _new_data(self):
@@ -126,7 +150,7 @@ class deviceWidget(QWidget):
             pass
             
         self._update_info()        
-        #print('Hallo new data!')
+        print('Hallo new data!')
 
     def _update_info(self):
         #print('Update')        
@@ -150,11 +174,30 @@ class deviceWidget(QWidget):
                 except:
                     self.identifiers.append(ident)
                     self.num_identifiers.append(0)
+                    #lab = QLabel(ident[:-1] + str(self.num_identifiers[-1]))
+                    self.update_ident_widgets.emit()                    
+
                     
                 #if not ident in self.identifiers:
 
-                #print(self.identifiers)
-                #print(self.num_identifiers)
+                print(self.identifiers)
+                print(self.num_identifiers)
+
+    # Done in a separate routine since _update_info is called from another thread
+    def _update_identifier_widgets(self):
+        """
+        """
+        print('Hallo! Update idents!!')
+        lab = QLabel('Hallo',self)
+        self._qlabels_identifiers.append(lab)
+        self.layout.addWidget(lab,3 + len(self.identifiers),0)   
+        # Test if we have a widget for plotting this dataset
+        ident = self.identifiers[-1]
+        for ide in plotwidgets:
+            if(isinstance(ide[0], str)):
+                ind = ident.find(ide[0])
+                if(ind >= 0):
+                    print('Found a widget for ' + str(ident) + ':' + str(ide[1]))
 
     def _show_raw_data(self):
         """
@@ -240,6 +283,8 @@ class serialWidget(QWidget):
                 # Create a new device widget
                 ind_serial = len(self.nmea0183logger.serial) - 1
                 dV = deviceWidget(ind_device = ind_serial,parent_gui = self.parent_gui)
+                # The signal seems to be connected here, otherwise it does not work ...
+                dV.update_ident_widgets.connect(dV._update_identifier_widgets)
                 self.parent_gui._add_device(dV)
                 self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)
 
