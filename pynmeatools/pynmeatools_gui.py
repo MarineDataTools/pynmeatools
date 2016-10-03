@@ -106,8 +106,10 @@ class deviceWidget(QWidget):
         self._qlabel_sentence = QLabel('')
 
         self._update_info()
-
+        
+        self._flag_show_raw_data = False
         self._button_raw_data = QPushButton('Raw data')
+        self._button_raw_data.clicked.connect(self._show_raw_data)
         layout = QGridLayout(self)
         layout.addWidget(self._qlabel_info,0,0)
         layout.addWidget(self._qlabel_bin,1,0)
@@ -120,11 +122,14 @@ class deviceWidget(QWidget):
         Function called as a signal when new data arrives
         """
         funcname = self.__class__.__name__ + '._new_data()'
+        if(self._flag_show_raw_data):
+            pass
+            
         self._update_info()        
-        print('Hallo new data!')
+        #print('Hallo new data!')
 
     def _update_info(self):
-        print('Update')        
+        #print('Update')        
         if( self.nmea0183logger != None ):
             self._bin_str = 'Bytes read ' + str(self.serial['bytes_read'])
             self._sentence_str = 'NMEA sets read ' + str(self.serial['sentences_read'])
@@ -148,8 +153,23 @@ class deviceWidget(QWidget):
                     
                 #if not ident in self.identifiers:
 
-                print(self.identifiers)
-                print(self.num_identifiers)
+                #print(self.identifiers)
+                #print(self.num_identifiers)
+
+    def _show_raw_data(self):
+        """
+        Plots the raw data in a plaintextwidget
+        """
+        self._flag_show_raw_data = True
+        self._plaintext_data = QPlainTextEdit()
+        self._plaintext_data.setAttribute(Qt.WA_DeleteOnClose)
+        self._plaintext_data.destroyed.connect(self._raw_data_close)        
+        self._plaintext_data.show()
+
+
+    def _raw_data_close(self):
+        print('Destroyed!')
+        self._flag_show_raw_data = False        
 
 
 class serialWidget(QWidget):
