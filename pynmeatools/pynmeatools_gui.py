@@ -89,22 +89,49 @@ class positionWidget(QWidget):
     """
     A widget for NMEA position datasets (GGA, GGL)
     """
-    def __init__(self):
+    def __init__(self,port='XXX'):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
         QWidget.__init__(self)
+        self.port = port
+        Font = QFont('SansSerif', 15)
+        self.titles = {}
+        self.titles['lat']  = QLabel('Latitude')
+        self.titles['lon']  = QLabel('Longitude')
+        self.titles['time'] = QLabel('Time (UTC)')
+        self.titles['sat'] = QLabel('# Sat.')
+        self.titles['dil'] = QLabel('Accur.')                
+
         self.labels = {}
-        self.labels['lat']  = QLabel('XX1')
-        self.labels['lon']  = QLabel('XX2')
-        self.labels['time'] = QLabel('XX3')
-        
+        self.labels['lat']  = QLabel('XX')
+        self.labels['lon']  = QLabel('XX')
+        self.labels['time'] = QLabel('XX')
+        self.labels['sat']  = QLabel('XX')
+        self.labels['dil']  = QLabel('XX')                
+        for lab in self.titles.items():
+            lab[1].setFont(Font)
+
+        for lab in self.labels.items():
+            lab[1].setFont(Font)            
+
+        mainlayout = QVBoxLayout(self)
+
         layout = QGridLayout(self)
-        layout.addWidget(QLabel('Time (UTC)'),0,0)
+        layout.addWidget(self.titles['time'],0,0)
         layout.addWidget(self.labels['time'],1,0)                        
-        layout.addWidget(QLabel('Latitude'),0,1)
+        layout.addWidget(self.titles['lat'],0,1)
         layout.addWidget(self.labels['lat'],1,1)
-        layout.addWidget(QLabel('Longitude'),0,2)
-        layout.addWidget(self.labels['lon'],1,2)        
+        layout.addWidget(self.titles['lon'],0,2)
+        layout.addWidget(self.labels['lon'],1,2)
+        layout.addWidget(self.titles['sat'],2,0)
+        layout.addWidget(self.titles['dil'],2,1)                                
+        layout.addWidget(self.labels['sat'],3,0)
+        layout.addWidget(self.labels['dil'],3,1)
+
+        lab = QLabel(self.port)
+        lab.setFont(Font)            
+        mainlayout.addWidget(lab)
+        mainlayout.addLayout(layout)
 
 
     def new_data(self,new_data):
@@ -124,12 +151,18 @@ class positionWidget(QWidget):
                 self.labels['time'].setText(tstr)
             if(len(data.lat) > 0):
                 #latstr = str(data.latitude)
-                latstr = '{:03.6f}'.format(data.latitude)
+                latstr = '{:03.6f} '.format(data.latitude)
+                latstr += data.lat_dir
                 self.labels['lat'].setText(latstr)
             if(len(data.lon) > 0):
                 #lonstr = str(data.longitude)                
-                lonstr = '{:03.6f}'.format(data.longitude)                
+                lonstr = '{:03.6f} '.format(data.longitude)
+                lonstr += data.lon_dir
                 self.labels['lon'].setText(lonstr)
+            if(len(data.num_sats) > 0):
+                self.labels['sat'].setText(data.num_sats)
+            if(len(data.horizontal_dil) > 0):
+                self.labels['dil'].setText(data.horizontal_dil)                
             
 
 
@@ -268,7 +301,7 @@ class deviceWidget(QFrame):
             print(ide)
             if(sender_txt == ide[2]):
                 w = ide[1]
-                self.plot_widgets.append(w())
+                self.plot_widgets.append(w(port=self.serial['port']))
                 self.plot_widgets[-1].show()
 
                 
@@ -290,6 +323,10 @@ class deviceWidget(QFrame):
 
     def closeEvent(self, event):
         print("Closing all plot widgets")
+        try:
+            self._plaintext_data.close()
+        except:
+            pass
         for w in self.plot_widgets:
             w.close()
 
@@ -380,10 +417,10 @@ class serialWidget(QWidget):
 
 
 
-
-
 class QtPlainTextLoggingHandler(logging.Handler):
-
+    """
+    A handler to display logging text into a qt text widget
+    """
     def __init__(self,qtplaintextedit):
         logging.Handler.__init__(self)
         self.qtplaintextedit = qtplaintextedit
