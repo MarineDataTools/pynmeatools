@@ -142,14 +142,14 @@ class deviceWidget(QWidget):
         
         
     def _new_data(self):
-        """
-        Function called as a signal when new data arrives
+        """Function called as a signal when new data arrives, this is a dummy
+        function which emits a signal (update_ident_widgets.) and is
+        otherwise doing not much
+
         """
         funcname = self.__class__.__name__ + '._new_data()'
-        if(self._flag_show_raw_data):
-            pass
-            
-        self._update_info()        
+        # We do it with signals to make it thread-safe
+        self.update_ident_widgets.emit()
         print('Hallo new data!')
 
     def _update_info(self):
@@ -160,44 +160,50 @@ class deviceWidget(QWidget):
             self._qlabel_bin.setText(self._bin_str)
             self._qlabel_sentence.setText(self._sentence_str)
 
+            for ind,lab in enumerate(self._qlabels_identifiers):
+                txt = self.identifiers[ind][:-1] + ' ' + str(self.num_identifiers[ind])
+                lab.setText(txt)
+                
 
+    def _update_identifier_widgets(self):
+        """
+        """
         while(len(self.data_deque) > 0):
             raw_data = self.data_deque.pop()
             #print('Got: ' + str(raw_data))
             data = pynmeatools.parse(raw_data['nmea'])
+            if(self._flag_show_raw_data):
+                self._plaintext_data.insertPlainText(str(raw_data['nmea']))
+                pass            
+            print(data)
             # Check for new identifiers
             if(data != None):
                 ident = data.identifier()
+                print('Ident:' + ident)
                 try:
                     ind = self.identifiers.index(ident)
                     self.num_identifiers[ind] += 1
                 except:
+                    print('Adding identifier:' + str(ident))                    
                     self.identifiers.append(ident)
                     self.num_identifiers.append(0)
-                    #lab = QLabel(ident[:-1] + str(self.num_identifiers[-1]))
-                    self.update_ident_widgets.emit()                    
-
-                    
+                    lab = QLabel(ident[:-1] + ' 1')
+                    #lab = QLabel(ident,self)
+                    self._qlabels_identifiers.append(lab)
+                    self.layout.addWidget(lab,3 + len(self.identifiers),0)   
+                    # Test if we have a widget for plotting this dataset
+                    for ide in plotwidgets:
+                        if(isinstance(ide[0], str)):
+                            ind = ident.find(ide[0])
+                            if(ind >= 0):
+                                print('Found a widget for ' + str(ident) + ':' + str(ide[1]))
+                self._update_info()
                 #if not ident in self.identifiers:
 
                 print(self.identifiers)
                 print(self.num_identifiers)
+                
 
-    # Done in a separate routine since _update_info is called from another thread
-    def _update_identifier_widgets(self):
-        """
-        """
-        print('Hallo! Update idents!!')
-        lab = QLabel('Hallo',self)
-        self._qlabels_identifiers.append(lab)
-        self.layout.addWidget(lab,3 + len(self.identifiers),0)   
-        # Test if we have a widget for plotting this dataset
-        ident = self.identifiers[-1]
-        for ide in plotwidgets:
-            if(isinstance(ide[0], str)):
-                ind = ident.find(ide[0])
-                if(ind >= 0):
-                    print('Found a widget for ' + str(ident) + ':' + str(ide[1]))
 
     def _show_raw_data(self):
         """
