@@ -105,14 +105,16 @@ class positionWidget(QWidget):
 plotwidgets = []
 plotwidgets.append(['GGA',positionWidget])        
 
-class deviceWidget(QWidget):
+#class deviceWidget(QWidget):
+class deviceWidget(QFrame):
     """
     A widget for a single NMEA device in a nmea0183logger
     """
     update_ident_widgets = pyqtSignal()    
     def __init__(self, ind_device=0, parent_gui = None,dequelen = 100000):
         # Do the rest
-        QWidget.__init__(self)        
+        #QWidget.__init__(self)
+        super(deviceWidget, self).__init__()
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
         # Do the rest
@@ -172,10 +174,10 @@ class deviceWidget(QWidget):
             raw_data = self.data_deque.pop()
             #print('Got: ' + str(raw_data))
             data = pynmeatools.parse(raw_data['nmea'])
+            # Show raw data
             if(self._flag_show_raw_data):
                 self._plaintext_data.insertPlainText(str(raw_data['nmea']))
-                pass            
-            print(data)
+
             # Check for new identifiers
             if(data != None):
                 ident = data.identifier()
@@ -289,6 +291,7 @@ class serialWidget(QWidget):
                 # Create a new device widget
                 ind_serial = len(self.nmea0183logger.serial) - 1
                 dV = deviceWidget(ind_device = ind_serial,parent_gui = self.parent_gui)
+                dV.setStyleSheet(""" deviceWidget { border: 2px solid black; border-radius: 2px; background-color: rgb(255, 255, 255); } """)
                 # The signal seems to be connected here, otherwise it does not work ...
                 dV.update_ident_widgets.connect(dV._update_identifier_widgets)
                 self.parent_gui._add_device(dV)
@@ -364,6 +367,8 @@ class guiMain(QMainWindow):
         # A table to add all the serial devices
         self._widget_devices = QWidget(self)
         self._layout_devices = QHBoxLayout(self._widget_devices)
+        self._layout_devices.addStretch(1)
+        
         # Layout
         mainlayout.addWidget(self._serial_widget,0,0)
         mainlayout.addWidget(self._button_log,0,1)
@@ -382,8 +387,11 @@ class guiMain(QMainWindow):
         Adds a new deviceWidget
         
         """
+                
+        device.setMaximumWidth(300)
+        ind = len(self.device_widgets)
         self.device_widgets.append(device)
-        self._layout_devices.addWidget(device)        
+        self._layout_devices.insertWidget(ind,device)        
         
         
     def _log_widget(self):
