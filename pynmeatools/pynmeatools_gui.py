@@ -93,8 +93,44 @@ class positionWidget(QWidget):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
         QWidget.__init__(self)
+        self.labels = {}
+        self.labels['lat']  = QLabel('XX1')
+        self.labels['lon']  = QLabel('XX2')
+        self.labels['time'] = QLabel('XX3')
+        
         layout = QGridLayout(self)
-        layout.addWidget(QLabel('Hallo!'),0,0)
+        layout.addWidget(QLabel('Time (UTC)'),0,0)
+        layout.addWidget(self.labels['time'],1,0)                        
+        layout.addWidget(QLabel('Latitude'),0,1)
+        layout.addWidget(self.labels['lat'],1,1)
+        layout.addWidget(QLabel('Longitude'),0,2)
+        layout.addWidget(self.labels['lon'],1,2)        
+
+
+    def new_data(self,new_data):
+        """
+        The function to feed the widget with new data
+        """
+        try:
+            data = pynmeatools.parse(new_data['nmea'])
+        except Exception as e:
+            print(str(e))
+            return
+
+        if('GGA' in data.identifier()):
+            print('DATA',data)            
+            if(not(data.timestamp == None)):
+                tstr = data.timestamp.strftime('%H:%M:%S')
+                self.labels['time'].setText(tstr)
+            if(len(data.lat) > 0):
+                #latstr = str(data.latitude)
+                latstr = '{:03.6f}'.format(data.latitude)
+                self.labels['lat'].setText(latstr)
+            if(len(data.lon) > 0):
+                #lonstr = str(data.longitude)                
+                lonstr = '{:03.6f}'.format(data.longitude)                
+                self.labels['lon'].setText(lonstr)
+            
 
 
 #
@@ -103,7 +139,7 @@ class positionWidget(QWidget):
 #
 # Connect NMEA sentences and widgets which can plot them
 plotwidgets = []
-plotwidgets.append(['GGA',positionWidget])        
+plotwidgets.append(['GGA',positionWidget,'Position'])        
 
 #class deviceWidget(QWidget):
 class deviceWidget(QFrame):
@@ -132,15 +168,22 @@ class deviceWidget(QFrame):
         self._qlabel_sentence = QLabel('')
         self._qlabels_identifiers = []
         self._update_info()
+
+        # A list of widgets to plot the NMEA data
+        self.plot_widgets = []        
         
         self._flag_show_raw_data = False
         self._button_raw_data = QPushButton('Raw data')
         self._button_raw_data.clicked.connect(self._show_raw_data)
         self.layout = QGridLayout(self)
+        self.layout_idents = QVBoxLayout(self)
+        self.layout_plot_idents = QVBoxLayout(self)        
         self.layout.addWidget(self._qlabel_info,0,0)
         self.layout.addWidget(self._qlabel_bin,1,0)
-        self.layout.addWidget(self._qlabel_sentence,2,0)        
-        self.layout.addWidget(self._button_raw_data,3,0)
+        self.layout.addWidget(self._qlabel_sentence,2,0)
+        self.layout.addLayout(self.layout_idents,3,0)
+        self.layout.addLayout(self.layout_plot_idents,4,0)
+        self.layout_plot_idents.addWidget(self._button_raw_data)
         
         
     def _new_data(self):
@@ -157,13 +200,13 @@ class deviceWidget(QFrame):
     def _update_info(self):
         #print('Update')        
         if( self.nmea0183logger != None ):
-            self._bin_str = 'Bytes read ' + str(self.serial['bytes_read'])
-            self._sentence_str = 'NMEA sets read ' + str(self.serial['sentences_read'])
+            self._bin_str = 'Bytes read \t' + str(self.serial['bytes_read'])
+            self._sentence_str = 'NMEA sets read \t' + str(self.serial['sentences_read'])
             self._qlabel_bin.setText(self._bin_str)
             self._qlabel_sentence.setText(self._sentence_str)
 
             for ind,lab in enumerate(self._qlabels_identifiers):
-                txt = self.identifiers[ind][:-1] + ' ' + str(self.num_identifiers[ind])
+                txt = self.identifiers[ind][:-1] + ' \t' + str(self.num_identifiers[ind])
                 lab.setText(txt)
                 
 
@@ -178,6 +221,12 @@ class deviceWidget(QFrame):
             if(self._flag_show_raw_data):
                 self._plaintext_data.insertPlainText(str(raw_data['nmea']))
 
+            # Send data to widgets
+            # TODO: This could be done thread safe using queues
+            
+            for w in self.plot_widgets:
+                w.new_data(raw_data)
+
             # Check for new identifiers
             if(data != None):
                 ident = data.identifier()
@@ -190,23 +239,39 @@ class deviceWidget(QFrame):
                     self.identifiers.append(ident)
                     self.num_identifiers.append(0)
                     lab = QLabel(ident[:-1] + ' 1')
-                    #lab = QLabel(ident,self)
                     self._qlabels_identifiers.append(lab)
-                    self.layout.addWidget(lab,3 + len(self.identifiers),0)   
+                    self.layout_idents.addWidget(lab)   
                     # Test if we have a widget for plotting this dataset
                     for ide in plotwidgets:
                         if(isinstance(ide[0], str)):
                             ind = ident.find(ide[0])
                             if(ind >= 0):
                                 print('Found a widget for ' + str(ident) + ':' + str(ide[1]))
+                                but = QPushButton(ide[2])
+                                but.clicked.connect(self._open_widgets)
+                                self.layout_plot_idents.addWidget(but)
+                                
                 self._update_info()
-                #if not ident in self.identifiers:
-
-                print(self.identifiers)
-                print(self.num_identifiers)
+                #print(self.identifiers)
+                #print(self.num_identifiers)
                 
+                
+    def _open_widgets(self):
+        """
+        Opens widgets for plotting data
+        """
+        sender = self.sender()
+        sender_txt =str(sender.text())
+        print('Hallo: ' + str(sender.text()))
+        # Check which widget we have
+        for ide in plotwidgets:
+            print(ide)
+            if(sender_txt == ide[2]):
+                w = ide[1]
+                self.plot_widgets.append(w())
+                self.plot_widgets[-1].show()
 
-
+                
     def _show_raw_data(self):
         """
         Plots the raw data in a plaintextwidget
@@ -214,13 +279,19 @@ class deviceWidget(QFrame):
         self._flag_show_raw_data = True
         self._plaintext_data = QPlainTextEdit()
         self._plaintext_data.setAttribute(Qt.WA_DeleteOnClose)
-        self._plaintext_data.destroyed.connect(self._raw_data_close)        
+        self._plaintext_data.destroyed.connect(self._raw_data_close)
         self._plaintext_data.show()
 
 
     def _raw_data_close(self):
         print('Destroyed!')
-        self._flag_show_raw_data = False        
+        self._flag_show_raw_data = False
+
+
+    def closeEvent(self, event):
+        print("Closing all plot widgets")
+        for w in self.plot_widgets:
+            w.close()
 
 
 class serialWidget(QWidget):
@@ -435,7 +506,13 @@ class guiMain(QMainWindow):
         try:
             self._log_widget.close()
         except:
-            pass        
+            pass
+
+
+        # Closing all device widgets
+        for w in self.device_widgets:
+            w.close()
+        
         
         self.close()
 
