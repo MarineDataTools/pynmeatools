@@ -52,6 +52,7 @@ class nmea0183logger(object):
         funcname =  '__init__()'
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(loglevel)
+        self.loglevel = loglevel
         self.logger.debug(funcname)                    
         self.dequelen = 10000
         self.serial      = []
@@ -67,13 +68,14 @@ class nmea0183logger(object):
             self.logger.debug(funcname + ': Opening: ' + port)            
             serial_dict = {}
             serial_dict['sentences_read'] = 0
-            serial_dict['bytes_read'] = 0
-            serial_dict['port']       = port
-            serial_dict['device']       = serial.Serial(port,baud)
-            serial_dict['thread_queue'] = queue.Queue()
-            serial_dict['data_queues']  = []
-            serial_dict['data_signals']  = []            
-            serial_dict['thread']       = threading.Thread(target=self.read_nmea_sentences_serial,args = (serial_dict,))
+            serial_dict['bytes_read']     = 0
+            serial_dict['device_name']    = port            
+            serial_dict['port']           = port
+            serial_dict['device']         = serial.Serial(port,baud)
+            serial_dict['thread_queue']   = queue.Queue()
+            serial_dict['data_queues']    = []
+            serial_dict['data_signals']   = []            
+            serial_dict['thread']         = threading.Thread(target=self.read_nmea_sentences_serial,args = (serial_dict,))
             serial_dict['thread'].daemon = True
             serial_dict['thread'].start()
             self.serial.append(serial_dict)
@@ -166,12 +168,13 @@ class nmea0183logger(object):
             sock.setblocking(0) # Nonblocking
             serial_dict = {}
             serial_dict['sentences_read'] = 0
-            serial_dict['device']       = sock
-            serial_dict['address']      = address
-            serial_dict['port']         = port
-            serial_dict['thread_queue'] = queue.Queue()
-            serial_dict['thread']       = threading.Thread(target=self.read_nmea_sentences_tcp,args = (serial_dict,))
-            serial_dict['thread'].daemon = True
+            serial_dict['device']         = sock
+            serial_dict['address']        = address
+            serial_dict['port']           = port
+            serial_dict['device_name']    = address + ':' + str(port)
+            serial_dict['thread_queue']   = queue.Queue()
+            serial_dict['thread']         = threading.Thread(target=self.read_nmea_sentences_tcp,args = (serial_dict,))
+            serial_dict['thread'].daemon  = True
             serial_dict['thread'].start()
             print('1')            
             self.serial.append(serial_dict)            
@@ -401,8 +404,52 @@ class nmea0183logger(object):
                 break
             except queue.Empty:
                 pass
+
+            
+    def create_pymqdatastream(self,address=None):
+        """Creates pymqdatastream to stream the read data and to comminucate
+        with a remote logger object
+        Input:
+           address: The address of the datastream, default; pymqdatastream will take care
+        """
+        funcname = 'create_pymqdatastream()'
+        import pymqdatastream
+        self.logger.debug(funcname + ': Creating DataStream')
+        stream = pymqdatastream.DataStream(name='nmea0183logger',logging_level=self.loglevel)
+        # Each Datastream streams only to one network, so create a
+        # list if more Datastreams fo more networks are required
+        try:
+            self.pymqdatastreams.append(stream)
+        except Excpetion as e:
+            self.pymqdatastreams = [stream]
+
+
+    def add_Stream(self,datastream=self.pymqdatastreams[0],serial):
+        """
+        Adds a pymqdatastream Stream for a serial device.
+        Input:
+           datastream: The datastream for publication, defaults to the first one (created with create_pymqdatastream)
+           serial: The serial device to be transmitted
+        """
+        funcname = 'add_datastream()'
+
+        # Create variables
+        timevar = pymqdatastream.StreamVariable(name = 'unix time',\
+                                                unit = 'seconds',\
+                                                datatype = 'float')
+        datavar = pymqdatastream.StreamVariable(name = 'NMEA data',\
+                                                datatype = 'str',\
+                                                unit = 'NMEA')
+        variables = [timevar,datavar]
+        name = serial['device_name']
+        # Adding publisher sockets and add variables
+        datastream.add_pub_socket()
         
+        sendstream =  datastream.add_pub_stream(
+            socket = datastream.sockets[-1],
+            name=name,variables=variables)
         
+            
 def main():
     """
 
@@ -411,6 +458,7 @@ def main():
     """
     serial_help = 'Serial device to read data from in unixoid OSes e.g. /dev/ttyACM0'
     interval_help = 'Time interval at which new files are created (in seconds)'
+    datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network'
     parser = argparse.ArgumentParser()
     parser.add_argument('--log_stream', '-l')
     parser.add_argument('--filename', '-f')
@@ -419,6 +467,8 @@ def main():
     parser.add_argument('--port', '-p')
     parser.add_argument('--interval', '-i', default=0, type=int, help=interval_help)        
     parser.add_argument('--verbose', '-v', action='count')
+
+    parser.add_argument('--datastream', '-d', help=datastream_help)        
 
     args = parser.parse_args()
     # Print help and exit when no arguments are given
@@ -450,6 +500,7 @@ def main():
     #serial_device = args.serial_device
     if(args.serial_device != None):
         for serial_device in args.serial_device:
+            logger.debug('Adding serial device ' + str(serial_device))
             serial_device = serial_device[0]
             if(serial_device != None):
                 try:
@@ -464,6 +515,14 @@ def main():
         s.add_tcp_stream(addr,port)
     except Exception as e:
         logger.debug('main(): no addres/port given')
+
+
+    # Create datastream?
+    if(args.datastream != None):
+        logger.debug('Creating a pymqdatastream Datastream')
+        s.create_pymqdatastream()
+        
+
         
 
     while(True):
