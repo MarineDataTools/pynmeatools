@@ -424,7 +424,7 @@ class nmea0183logger(object):
             self.pymqdatastreams = [stream]
 
 
-    def add_Stream(self,datastream=self.pymqdatastreams[0],serial):
+    def add_Stream(self,serial,datastream=None):
         """
         Adds a pymqdatastream Stream for a serial device.
         Input:
@@ -432,7 +432,8 @@ class nmea0183logger(object):
            serial: The serial device to be transmitted
         """
         funcname = 'add_datastream()'
-
+        if datastream == None:
+            datastream = self.pymqdatastreams[0]
         # Create variables
         timevar = pymqdatastream.StreamVariable(name = 'unix time',\
                                                 unit = 'seconds',\
@@ -456,10 +457,12 @@ def main():
     Main routine
 
     """
+    usage_str = 'pynmeatools_nmea0183logger --serial_device /dev/ttyACM0 -f test_log -v -v -v'
+    desc = 'A python NMEA logger. Example usage: ' + usage_str
     serial_help = 'Serial device to read data from in unixoid OSes e.g. /dev/ttyACM0'
     interval_help = 'Time interval at which new files are created (in seconds)'
     datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network'
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--log_stream', '-l')
     parser.add_argument('--filename', '-f')
     parser.add_argument('--serial_device', '-s', nargs='+', action='append', help=serial_help)
