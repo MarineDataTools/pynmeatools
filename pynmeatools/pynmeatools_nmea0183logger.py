@@ -535,7 +535,7 @@ def main():
     if(args.publish_datastream == True):
         logger.debug('Creating a pymqdatastream Datastream')
         s.create_pymqdatastream()
-        # TODO: add all devices
+        # TODO: add all devices, should be done in nmealogger via registering ...
         s.add_stream(s.serial[0])
 
 
