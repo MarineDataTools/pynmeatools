@@ -14,9 +14,17 @@ import collections
 import time
 import argparse
 import pynmea2
+try:
+    import pymqdatastream
+except ImportError:
+    print('Could not import pymqdatastream, this is not dramatic but some fuctionality is missing (network publishing)')
+    pymqdatastream = None
 
 logger = logging.getLogger('pynmeatool_nmea0183logger.py')
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+
+
+    
 
 
 # TODO: This should be somewhere else
@@ -54,10 +62,12 @@ class nmea0183logger(object):
         self.logger.setLevel(loglevel)
         self.loglevel = loglevel
         self.logger.debug(funcname)                    
-        self.dequelen = 10000
-        self.serial      = []
-        self.datafiles   = []        
-        self.deques      = []
+        self.dequelen       = 10000
+        self.serial         = []
+        self.datafiles      = []        
+        self.deques         = []
+        self.pymqdatastream = None
+        self.name           = 'nmea0183logger' # This is mainly used as a datastream identifier
 
         
     def add_serial_device(self,port,baud=4800):
@@ -80,6 +90,10 @@ class nmea0183logger(object):
             serial_dict['thread'].daemon = True
             serial_dict['thread'].start()
             self.serial.append(serial_dict)
+            if(self.pymqdatastream != None):
+                self.add_stream(serial_dict)
+                
+                
             return True
         except Exception as e:
             self.logger.debug(funcname + ': Exception: ' + str(e))            
@@ -241,7 +255,31 @@ class nmea0183logger(object):
             except queue.Empty:
                 pass
                     
-        return True            
+        return True
+
+
+
+    def add_datastream(self,address=None):
+        """
+        Adds a nmea0183 logger datastream
+        """
+        funcname = 'add_datastream()'
+        self.logger.debug(funcname)
+        # Create a pymqdatastream if neccessary
+        if(self.pymqdatastream == None):
+            self.create_pymqdatastream()
+
+        # Query remote datastreams
+        self.logger.debug(funcname + ': querying')
+        remote_datastreams = self.pymqdatastream.query_datastreams()
+        self.logger.debug(funcname + ':' + str(remote_datastreams))
+        for s in remote_datastreams:
+            print(s.name)
+            if(self.name in s.name): # Do we have a nmealogger?
+                print('Found a logger!')
+                print(s)
+            
+        
 
 
     def add_file_to_save(self,filename, style = 'all'):
@@ -339,7 +377,7 @@ class nmea0183logger(object):
             except queue.Empty:
                 pass
             
-
+            
     def serial_info(self):
         """
         Creates an information string of the serial devices, the bytes and NMEA sentences read 
@@ -352,8 +390,8 @@ class nmea0183logger(object):
             info_str += str(s['sentences_read']) + ' NMEA sentences' + '\n'
 
         return info_str
-
-            
+    
+    
     def log_data_in_files(self, filename, time_interval):
         """
         Creates every time_interval a new file and logs the data to it
@@ -374,7 +412,7 @@ class nmea0183logger(object):
             self.logger.debug(funcname + ': Creating file and logging data to ' + filename)            
             datafile = self.add_file_to_save(filename)
             
-
+            
     def time_interval_thread(self,filename,time_interval,thread_queue):
         """
 
@@ -388,7 +426,7 @@ class nmea0183logger(object):
         filename_time = now.strftime(filename + '__%Y%m%d_%H%M%S.log')
         datafile = self.add_file_to_save(filename_time)
         tstart = now
-    
+        
         while True:
             time.sleep(dt)            
             now = datetime.datetime.now()
@@ -401,7 +439,7 @@ class nmea0183logger(object):
                 filename_time = now.strftime(filename + '__%Y%m%d_%H%M%S.log')
                 datafile = self.add_file_to_save(filename_time)
                 time.sleep(0.01)                
-
+                
             # Try to read from the queue, if something was read, quit
             try:
                 data = thread_queue.get(block=False)
@@ -410,7 +448,7 @@ class nmea0183logger(object):
                 break
             except queue.Empty:
                 pass
-
+            
             
     def create_pymqdatastream(self,address=None):
         """Creates pymqdatastream to stream the read data and to comminucate
@@ -419,28 +457,21 @@ class nmea0183logger(object):
            address: The address of the datastream, default; pymqdatastream will take care
         """
         funcname = 'create_pymqdatastream()'
-        import pymqdatastream
+        # Import pymqdatastream here
         self.logger.debug(funcname + ': Creating DataStream')
-        stream = pymqdatastream.DataStream(name='nmea0183logger',logging_level=self.loglevel)
-        # Each Datastream streams only to one network, so create a
-        # list if more Datastreams fo more networks are required
-        try:
-            self.pymqdatastreams.append(stream)
-        except Exception as e:
-            self.pymqdatastreams = [stream]
-
-
-    def add_stream(self,serial,datastream=None):
+        datastream = pymqdatastream.DataStream(name=self.name,logging_level=self.loglevel)
+        self.pymqdatastream = datastream
+            
+            
+    def add_stream(self,serial):
         """
         Adds a pymqdatastream Stream for a serial device.
         Input:
-           datastream: The datastream for publication, defaults to the first one (created with create_pymqdatastream)
            serial: The serial device to be transmitted
         """
-        funcname = 'add_datastream()'
-        import pymqdatastream        
-        if datastream == None:
-            datastream = self.pymqdatastreams[0]
+        funcname = 'add_stream()'
+        
+        datastream = self.pymqdatastream
         # Create variables
         timevar = pymqdatastream.StreamVariable(name = 'unix time',\
                                                 unit = 'seconds',\
@@ -456,8 +487,16 @@ class nmea0183logger(object):
         sendstream =  datastream.add_pub_stream(
             socket = datastream.sockets[-1],
             name   = name,variables = variables)
-
+        
         serial['streams'].append(sendstream)
+        
+        
+    def publish_devices(self):
+        """
+        Publishes all devices
+        """
+        for s in self.serial:
+            self.add_stream(s)        
         
             
 def main():
@@ -481,7 +520,7 @@ def main():
     parser.add_argument('--interval', '-i', default=0, type=int, help=interval_help)        
     parser.add_argument('--verbose', '-v', action='count')
     parser.add_argument('--publish_datastream', '-pd', action='store_true', help=publish_datastream_help)
-    parser.add_argument('--datastream', '-d', help=datastream_help)    
+    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)    
     
     args = parser.parse_args()
     # Print help and exit when no arguments are given
@@ -522,28 +561,28 @@ def main():
                     logger.debug('main():',e)
                     
     
-    try:
+    if(args.address != None and args.port != None):
         addr = args.address
         port = int(args.port)
         s.add_tcp_stream(addr,port)
-    except Exception as e:
-        logger.debug('main(): no addres/port given')
     
     
-    print(args.publishdatastream)
-    # Create datastream?
+    print(args.publish_datastream)
+    # Create datastream? 
     if(args.publish_datastream == True):
         logger.debug('Creating a pymqdatastream Datastream')
         s.create_pymqdatastream()
-        # TODO: add all devices, should be done in nmealogger via registering ...
-        s.add_stream(s.serial[0])
+        # TODO: add all devices, should be done in nmealogger via registering ..
+        s.publish_devices()
 
 
     # Connect to datastream?
-    if(args.datastream != None):
-        logger.debug('Connecting to  pymqdatastream Datastream logger')
-        #s.create_pymqdatastream()
-        #s.add_stream(s.serial[0])        
+    # False if not specified, None if no argument was given, otherwise address
+    print('Args datastream:',args.datastream)
+    if(args.datastream != False):    
+        if(args.datastream == None):
+            logger.debug('Connecting to  pymqdatastream Datastream logger')
+            s.add_datastream()
         
 
         
