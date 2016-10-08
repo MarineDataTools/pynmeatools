@@ -278,10 +278,72 @@ class nmea0183logger(object):
             if(self.name in s.name): # Do we have a nmealogger?
                 print('Found a logger!')
                 print(s)
+                for stream in s.Streams:
+                    if('nmea stream' in stream.name):
+                        print('Found nmea stream, will subscribe')
+                        recvstream = self.pymqdatastream.subscribe_stream(stream)
+                        serial_dict = {}
+                        serial_dict['sentences_read'] = 0
+                        serial_dict['bytes_read']     = 0
+                        serial_dict['device_name']    = stream.name
+                        serial_dict['address']        = stream.address
+                        serial_dict['port']           = port
+                        serial_dict['device']         = recvstream
+                        serial_dict['thread_queue']   = queue.Queue()
+                        serial_dict['data_queues']    = []
+                        serial_dict['data_signals']   = []
+                        serial_dict['streams']        = [] # pymqdatastream publication streams
+                        serial_dict['thread']         = threading.Thread(target=self.read_nmea_sentences_datastream,args = (serial_dict,))
+                        serial_dict['thread'].daemon = True
+                        serial_dict['thread'].start()
+                        self.serial.append(serial_dict)                        
+
+
+    def read_nmea_sentences_datastream(self,serial_dict):
+        """
+        The datastream polling thread
+        Args:
+            serial_dict: 
+        """
+        thread_queue = serial_dict['thread_queue']        
+        while True:
+            time.sleep(0.02)
+            ndata = len(recvstream.deque)                
+            if(ndata > 0):
+                data = serial_dict['device'].pop_data(n=1)
+                for d in data:
+                    print('Data received',data)
+                    bytes_recv = serial_dict['device'].statistic['bytes_received']
+                    print('Bytes received:' + str(bytes_recv)
+
+                    for deque in self.deques:
+                        deque.appendleft(nmea_data)
+
+                    # Send into specialised data queues as e.g. for the gui
+                    for deque in serial_dict['data_queues']:
+                        deque.appendleft(nmea_data)
+
+                    # Send into pymqdatastream streams
+                    for stream in serial_dict['streams']:
+                        stream.pub_data([[ti,nmea_sentence]])
+
+                    # Call signal functions for new data
+                    for s in serial_dict['data_signals']:
+                        s()
+
+                    serial_dict['sentences_read'] += 1                      
+                
+                
+            # Try to read from the queue, if something was read, quit
+            # the thread
+            try:
+                data = thread_queue.get(block=False)
+                self.logger.debug(funcname + ': Got data:' + data)
+                break
+            except queue.Empty:
+                pass                
             
-        
-
-
+            
     def add_file_to_save(self,filename, style = 'all'):
         """
         Adds a file to save the data to
@@ -480,7 +542,7 @@ class nmea0183logger(object):
                                                 datatype = 'str',\
                                                 unit = 'NMEA')
         variables = [timevar,datavar]
-        name = serial['device_name']
+        name = 'nmea stream' + serial['device_name']
         # Adding publisher sockets and add variables
         datastream.add_pub_socket()
         
