@@ -15,13 +15,22 @@ import time
 import argparse
 import glob
 import pynmeatools
-
+try:
+    import pymqdatastream.connectors.qt.qt_service as datastream_qt_service
+    FLAG_PYMQDATASTREAM=True
+except:
+    FLAG_PYMQDATASTREAM=False    
+    print('Did not found pymqdatastream')
 
 # TODO
 # Implement this here
-# http://stackoverflow.com/questions/24469662/how-to-redirect-logger-output-into-pyqt-text-widget
+# http://stackoverflow.com/questions/24469662/how-to-redirect-logger-outpu-tinto-pyqt-text-widget
 #
 #
+
+# A stylesheet for the device widgets
+
+device_style = """ deviceWidget { border: 2px solid black; border-radius: 2px; background-color: rgb(255, 255, 255); } """
 
 
 # Import qt
@@ -39,17 +48,12 @@ except:
         raise Exception('Could not import qt, exting')
 
 
-print(pynmeatools)
 
 logging.basicConfig(stream=sys.stderr)
 logger = logging.getLogger('pynmeatools_gui')
 logger.setLevel(logging.DEBUG)
 
-pynmeatools.nmea0183logger.logger.setLevel(logging.DEBUG)
-
-
-logger.info('HALLO')
-logger.debug('HALLO')
+#pynmeatools.nmea0183logger.logger.setLevel(logging.DEBUG)
 
 def serial_ports():
     """ Lists serial port names
@@ -399,7 +403,7 @@ class serialWidget(QWidget):
                 # Create a new device widget
                 ind_serial = len(self.nmea0183logger.serial) - 1
                 dV = deviceWidget(ind_device = ind_serial,parent_gui = self.parent_gui)
-                dV.setStyleSheet(""" deviceWidget { border: 2px solid black; border-radius: 2px; background-color: rgb(255, 255, 255); } """)
+                dV.setStyleSheet(device_style)
                 # The signal seems to be connected here, otherwise it does not work ...
                 dV.update_ident_widgets.connect(dV._update_identifier_widgets)
                 self.parent_gui._add_device(dV)
@@ -445,7 +449,7 @@ class guiMain(QMainWindow):
         funcname = self.__class__.__name__ + '.___init__()'
         self.__version__ = pynmeatools.__version__
         # Add a logger object
-        self.nmea0183logger = pynmeatools.nmea0183logger.nmea0183logger(loglevel=logging.DEBUG)
+        self.nmea0183logger = pynmeatools.nmea0183logger(loglevel=logging.DEBUG)
         # Do the rest
         QWidget.__init__(self)
         # Create the menu
@@ -463,26 +467,42 @@ class guiMain(QMainWindow):
         
         self._serial_widget = serialWidget(self)
         
-        
+        # Logging widget
         self._button_log = QPushButton('Show log')
         self._button_log.clicked.connect(self._log_widget)
         self._combo_loglevel = QComboBox()
         self._combo_loglevel.addItem('Debug')
         self._combo_loglevel.addItem('Info')
         self._combo_loglevel.addItem('Warning')
+
+        # Datastream widgets
+        # Do only if pymqdatastream exists
+        if(FLAG_PYMQDATASTREAM):
+            self._widget_pymqds = QWidget(self)
+            self._button_pymqds = QPushButton('Open')
+            self.nmea0183logger.create_pymqdatastream()
+            self._layout_pymqds = QHBoxLayout(self._widget_pymqds)                
+            self._layout_pymqds.addWidget(self._button_pymqds)
+            self._layout_pymqds.addStretch(1)
+            #self.DatastreamChoose.handle_update_clicked()
+            self._button_pymqds.clicked.connect(self._clicked_datastream_subscribe)
+
+            
         
-        
-        # A table to add all the serial devices
+        # A table to add all the NMEA devices
         self._widget_devices = QWidget(self)
         self._layout_devices = QHBoxLayout(self._widget_devices)
         self._layout_devices.addStretch(1)
         
         # Layout
-        mainlayout.addWidget(self._serial_widget,0,0)
-        mainlayout.addWidget(self._button_log,0,1)
-        mainlayout.addWidget(self._combo_loglevel,0,2)
+        mainlayout.addWidget(QLabel('Serial device'),0,0)        
+        mainlayout.addWidget(self._serial_widget,0,1)
+        mainlayout.addWidget(self._button_log,0,2)
+        mainlayout.addWidget(self._combo_loglevel,0,3)
+        mainlayout.addWidget(QLabel('Datastream'),1,0)
+        mainlayout.addWidget(self._widget_pymqds,1,1)
 
-        mainlayout.addWidget(self._widget_devices,1,0,2,3)
+        mainlayout.addWidget(self._widget_devices,2,0,2,3)
 
         # Focus 
         mainwidget.setFocus()
@@ -527,14 +547,36 @@ class guiMain(QMainWindow):
         """
         """
         funcname = self.__class__.__name__ + '._something_changed()'        
-        self.logger.debug(funcname)
+        logger.debug(funcname)
 
         
-    
+    def _clicked_datastream_subscribe(self):
+        self._datastreamsubscribe = datastream_qt_service.DataStreamSubscribeWidget(self.nmea0183logger.pymqdatastream, hide_myself=True, stream_type = 'pubstream')
+        self._datastreamsubscribe.signal_newstream.append(self.nmea0183logger.add_pymqdsStream)
+        self._datastreamsubscribe.signal_newstream.append(self._new_pymqdsStream)        
+        self._datastreamsubscribe.show()
+
+
+    def _new_pymqdsStream(self,stream):
+        """
+        Creating a device widget for a new pymqdsStream
+        """
+        funcname = '_new_pymqdsStream()'        
+        logger.debug(funcname)
+        ind_serial = len(self.nmea0183logger.serial) - 1        
+        dV = deviceWidget(ind_device = ind_serial,parent_gui = self)
+        dV.setStyleSheet(device_style)
+        # The signal seems to be connected here, otherwise it does not work ...
+        dV.update_ident_widgets.connect(dV._update_identifier_widgets)
+        self._add_device(dV)
+        self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)        
         
 
 
     def _quit(self):
+        funcname = '_quit()'        
+        logger.debug(funcname)
+        
         try:
             self._about_label.close()
         except:
@@ -545,11 +587,14 @@ class guiMain(QMainWindow):
         except:
             pass
 
+        try:
+            self._datastreamsubscribe.close()
+        except:
+            pass        
 
         # Closing all device widgets
         for w in self.device_widgets:
             w.close()
-        
         
         self.close()
 

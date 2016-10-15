@@ -288,24 +288,37 @@ class nmea0183logger(object):
                 print('Found a logger!')
                 print(s)
                 for stream in s.Streams:
-                    if('nmea' in stream.name):
-                        print('Found nmea stream, will subscribe')
-                        recvstream = self.pymqdatastream.subscribe_stream(stream,statistic=True)
-                        serial_dict = {}
-                        serial_dict['sentences_read'] = 0
-                        serial_dict['bytes_read']     = 0
-                        serial_dict['device_name']    = stream.name
-                        serial_dict['address']        = stream.socket[0].address
-                        serial_dict['port']           = ''
-                        serial_dict['device']         = recvstream
-                        serial_dict['thread_queue']   = queue.Queue()
-                        serial_dict['data_queues']    = []
-                        serial_dict['data_signals']   = []
-                        serial_dict['streams']        = [] # pymqdatastream publication streams
-                        serial_dict['thread']         = threading.Thread(target=self.read_nmea_sentences_datastream,args = (serial_dict,))
-                        serial_dict['thread'].daemon = True
-                        serial_dict['thread'].start()
-                        self.serial.append(serial_dict)                        
+                    self.add_pymqdsStream(stream)                    
+
+
+    def add_pymqdsStream(self,stream):
+        funcname = 'add_pymqdsStream()'        
+        if('nmea' in stream.name):
+            if(stream.stream_type == 'pubstream'): # Do we have to subscribe?
+                self.logger.debug(funcname + ': Found nmea stream, will subscribe')
+                recvstream = self.pymqdatastream.subscribe_stream(stream,statistic=True)
+            elif(stream.stream_type == 'substream'): # Already subscribed
+                self.logger.debug(funcname + ': Found an already subscribed nmea stream')
+                recvstream = stream
+            else:
+                self.logger.warning(funcname + ': Dont know what to do with stream:' + str(stream))
+            serial_dict = {}
+            serial_dict['sentences_read'] = 0
+            serial_dict['bytes_read']     = 0
+            serial_dict['device_name']    = recvstream.name
+            serial_dict['address']        = recvstream.socket.address
+            serial_dict['port']           = ''
+            serial_dict['device']         = recvstream
+            serial_dict['thread_queue']   = queue.Queue()
+            serial_dict['data_queues']    = []
+            serial_dict['data_signals']   = []
+            serial_dict['streams']        = [] # pymqdatastream publication streams
+            serial_dict['thread']         = threading.Thread(target=self.read_nmea_sentences_datastream,args = (serial_dict,))
+            serial_dict['thread'].daemon  = True
+            serial_dict['thread'].start()
+            self.serial.append(serial_dict)
+        else:
+            self.logger.info(funcname + 'given stream is not a nmea stream')
 
 
     def read_nmea_sentences_datastream(self,serial_dict):
@@ -325,6 +338,7 @@ class nmea0183logger(object):
                     print('Data received',data)
                     #bytes_recv = 0
                     bytes_recv = serial_dict['device'].socket.statistic['bytes_received']
+                    serial_dict['bytes_read'] = bytes_recv                    
                     nmea_data = {}
                     nmea_data['time'] = d['data'][0][0]
                     nmea_data['device'] = serial_dict['address'] + '/' + serial_dict['device_name']
