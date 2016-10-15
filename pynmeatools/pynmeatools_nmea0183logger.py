@@ -54,7 +54,7 @@ def parse(msg):
 class nmea0183logger(object):
     """
     """
-    def __init__(self,loglevel=logging.INFO):
+    def __init__(self,loglevel=logging.INFO,print_raw_data=False):
         """
         """
         funcname =  '__init__()'
@@ -68,6 +68,7 @@ class nmea0183logger(object):
         self.deques         = []
         self.pymqdatastream = None
         self.name           = 'nmea0183logger' # This is mainly used as a datastream identifier
+        self.print_raw_data = print_raw_data
 
         
     def add_serial_device(self,port,baud=4800):
@@ -142,7 +143,15 @@ class nmea0183logger(object):
                         nmea_data['time'] = ti
                         nmea_data['device'] = serial_device.name
                         nmea_data['nmea'] = nmea_sentence
-                        #self.logger.debug(funcname + ': device: '+ str(serial_device.port) + ' Read sentence:' + nmea_sentence)
+                        
+                        if(self.print_raw_data):
+                            write_str = ''
+                            write_str += nmea_data['device'] + ' ' 
+                            time_str = datetime.datetime.fromtimestamp(nmea_data['time']).strftime('%Y-%m-%d %H:%M:%S')
+                            write_str +=  time_str + ' '
+                            write_str += nmea_data['nmea']
+                            print(write_str)
+                            
                         for deque in self.deques:
                             deque.appendleft(nmea_data)
 
@@ -279,15 +288,15 @@ class nmea0183logger(object):
                 print('Found a logger!')
                 print(s)
                 for stream in s.Streams:
-                    if('nmea stream' in stream.name):
+                    if('nmea' in stream.name):
                         print('Found nmea stream, will subscribe')
-                        recvstream = self.pymqdatastream.subscribe_stream(stream)
+                        recvstream = self.pymqdatastream.subscribe_stream(stream,statistic=True)
                         serial_dict = {}
                         serial_dict['sentences_read'] = 0
                         serial_dict['bytes_read']     = 0
                         serial_dict['device_name']    = stream.name
-                        serial_dict['address']        = stream.address
-                        serial_dict['port']           = port
+                        serial_dict['address']        = stream.socket[0].address
+                        serial_dict['port']           = ''
                         serial_dict['device']         = recvstream
                         serial_dict['thread_queue']   = queue.Queue()
                         serial_dict['data_queues']    = []
@@ -305,16 +314,21 @@ class nmea0183logger(object):
         Args:
             serial_dict: 
         """
-        thread_queue = serial_dict['thread_queue']        
+        thread_queue = serial_dict['thread_queue']
+        recvstream = serial_dict['device']
         while True:
             time.sleep(0.02)
-            ndata = len(recvstream.deque)                
+            ndata = len(recvstream.deque)
             if(ndata > 0):
                 data = serial_dict['device'].pop_data(n=1)
                 for d in data:
                     print('Data received',data)
-                    bytes_recv = serial_dict['device'].statistic['bytes_received']
-                    print('Bytes received:' + str(bytes_recv)
+                    #bytes_recv = 0
+                    bytes_recv = serial_dict['device'].socket.statistic['bytes_received']
+                    nmea_data = {}
+                    nmea_data['time'] = d['data'][0][0]
+                    nmea_data['device'] = serial_dict['address'] + '/' + serial_dict['device_name']
+                    nmea_data['nmea'] =  d['data'][0][1]
 
                     for deque in self.deques:
                         deque.appendleft(nmea_data)
@@ -532,7 +546,7 @@ class nmea0183logger(object):
            serial: The serial device to be transmitted
         """
         funcname = 'add_stream()'
-        
+        self.logger.debug(funcname)
         datastream = self.pymqdatastream
         # Create variables
         timevar = pymqdatastream.StreamVariable(name = 'unix time',\
@@ -542,22 +556,25 @@ class nmea0183logger(object):
                                                 datatype = 'str',\
                                                 unit = 'NMEA')
         variables = [timevar,datavar]
-        name = 'nmea stream' + serial['device_name']
+        name = 'nmea;' + serial['device_name']
         # Adding publisher sockets and add variables
-        datastream.add_pub_socket()
+        pub_socket = datastream.add_pub_socket()
         
         sendstream =  datastream.add_pub_stream(
-            socket = datastream.sockets[-1],
+            socket = pub_socket,
             name   = name,variables = variables)
         
         serial['streams'].append(sendstream)
-        
+        print('Hallo',serial['streams'])
         
     def publish_devices(self):
         """
         Publishes all devices
         """
+        funcname = 'publish_devices()'
+        self.logger.debug(funcname)
         for s in self.serial:
+            self.logger.debug(funcname + ': Adding stream for' + str(s))            
             self.add_stream(s)        
         
             
@@ -572,7 +589,8 @@ def main():
     serial_help = 'Serial device to read data from in unixoid OSes e.g. /dev/ttyACM0'
     interval_help = 'Time interval at which new files are created (in seconds)'
     datastream_help = 'Connect to a nmea0183logger published with pymqdatastream'
-    publish_datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network'    
+    publish_datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network'
+    raw_data_datastream_help = 'Print raw NMEA data of all devices to the console'                                
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--log_stream', '-l')
     parser.add_argument('--filename', '-f')
@@ -582,7 +600,8 @@ def main():
     parser.add_argument('--interval', '-i', default=0, type=int, help=interval_help)        
     parser.add_argument('--verbose', '-v', action='count')
     parser.add_argument('--publish_datastream', '-pd', action='store_true', help=publish_datastream_help)
-    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)    
+    parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)
+    parser.add_argument('--print_raw_data', '-r', action='store_true', help=raw_data_datastream_help)                                
     
     args = parser.parse_args()
     # Print help and exit when no arguments are given
@@ -602,7 +621,7 @@ def main():
     time_interval = args.interval
     # Create a nmeaGrabber
     print('hallo Creating a logger')
-    s = nmea0183logger(loglevel=logging.DEBUG)
+    s = nmea0183logger(loglevel=logging.DEBUG,print_raw_data = args.print_raw_data)
     try:
         filename = args.filename
         print(filename)
@@ -627,9 +646,11 @@ def main():
         addr = args.address
         port = int(args.port)
         s.add_tcp_stream(addr,port)
+
+
+
     
-    
-    print(args.publish_datastream)
+    print('Args publish_datastream:',args.publish_datastream)
     # Create datastream? 
     if(args.publish_datastream == True):
         logger.debug('Creating a pymqdatastream Datastream')
