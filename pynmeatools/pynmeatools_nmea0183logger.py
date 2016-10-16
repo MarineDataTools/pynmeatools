@@ -108,6 +108,7 @@ class nmea0183logger(object):
         Removes a serial item
 
         """
+        funcname = 'rem_serial_device()'        
         pass
 
         
@@ -589,7 +590,26 @@ class nmea0183logger(object):
         self.logger.debug(funcname)
         for s in self.serial:
             self.logger.debug(funcname + ': Adding stream for' + str(s))            
-            self.add_stream(s)        
+            self.add_stream(s)
+
+
+    def rem_device(self,ind):
+        """
+
+        Removes a serial device
+
+        """
+
+        funcname = 'rem_device()'
+        self.logger.debug(funcname)        
+        serial = self.serial[ind]
+        serial['thread_queue'].send('stop')
+        if(serial['device'] == serial.Serial):
+            self.logger.debug(funcname + ': Stopping a serial device')
+        else:
+            self.logger.debug(funcname + ': Unknown device type')
+            
+
         
             
 def main():

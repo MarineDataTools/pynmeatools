@@ -341,10 +341,11 @@ class serialWidget(QWidget):
     """
     def __init__(self,parent_gui):
         funcname = self.__class__.__name__ + '.___init__()'
-        self.__version__ = pynmeatools.__version__
-        self.parent_gui = parent_gui
+        self.__version__    = pynmeatools.__version__
+        self.parent_gui     = parent_gui
         self.nmea0183logger = parent_gui.nmea0183logger
-        self.emit_signals = []
+        self.emit_signals   = []
+        self.ports_open     = []
         # Do the rest
         QWidget.__init__(self)
         
@@ -352,6 +353,7 @@ class serialWidget(QWidget):
         # Serial baud rates
         baud = [300,600,1200,2400,4800,9600,19200,38400,57600,115200,576000,921600]
         self._combo_serial_devices = QComboBox(self)
+        self._combo_serial_devices.currentIndexChanged.connect(self._serial_device_changed)
         self._combo_serial_baud = QComboBox(self)
         for b in baud:
             self._combo_serial_baud.addItem(str(b))
@@ -399,7 +401,7 @@ class serialWidget(QWidget):
             logger.debug(funcname + ": Opening Serial port" + port)
             ret = self.nmea0183logger.add_serial_device(port)
             if(ret):
-                self._combo_serial_devices.removeItem(ind)
+                #self._combo_serial_devices.removeItem(ind)
                 # Create a new device widget
                 ind_serial = len(self.nmea0183logger.serial) - 1
                 dV = deviceWidget(ind_device = ind_serial,parent_gui = self.parent_gui)
@@ -408,17 +410,34 @@ class serialWidget(QWidget):
                 dV.update_ident_widgets.connect(dV._update_identifier_widgets)
                 self.parent_gui._add_device(dV)
                 self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)
+                self.ports_open.append(port)
+                self._serial_device_changed()
 
                 
         elif(self.sender().text() == 'Close'):
-            pass
+            logger.debug(funcname + ": Closing Serial port" + port)
+            self.nmea0183logger.rem_device(ind)
+
+        else:
+            logger.debug(funcname + ": We should never have come here!")
 
 
         # Call all the functions in self.emit_signals
         for s in self.emit_signals:
             s()
 
-
+            
+    def _serial_device_changed(self):
+        funcname = "_serial_device_changed()"
+        logger.debug(funcname)
+        port = str(self._combo_serial_devices.currentText())
+        ind = self._combo_serial_devices.currentIndex()        
+        for p in self.ports_open:
+            if(p == port):
+                self._button_serial_openclose.setText('Close')
+                print('Same port!')
+            else:
+                self._button_serial_openclose.setText('Open')
 
 
 class QtPlainTextLoggingHandler(logging.Handler):
