@@ -416,8 +416,16 @@ class serialWidget(QWidget):
                 
         elif(self.sender().text() == 'Close'):
             logger.debug(funcname + ": Closing Serial port" + port)
-            self.nmea0183logger.rem_device(ind)
-
+            # Device
+            for ind,s in enumerate(self.nmea0183logger.serial):
+                if(s['port'] == port):
+                    logger.debug(funcname + ": Found serial device for port:" + port + ' at index:' + str(ind))
+                    self.ports_open.remove(port)
+                    self.parent_gui._rem_device(port=port)                    
+                    self.nmea0183logger.rem_device(ind)
+                    self._serial_device_changed()
+                    
+                    
         else:
             logger.debug(funcname + ": We should never have come here!")
 
@@ -431,13 +439,13 @@ class serialWidget(QWidget):
         funcname = "_serial_device_changed()"
         logger.debug(funcname)
         port = str(self._combo_serial_devices.currentText())
-        ind = self._combo_serial_devices.currentIndex()        
+        ind = self._combo_serial_devices.currentIndex()
         for p in self.ports_open:
             if(p == port):
                 self._button_serial_openclose.setText('Close')
-                print('Same port!')
-            else:
-                self._button_serial_openclose.setText('Open')
+                return
+
+        self._button_serial_openclose.setText('Open')
 
 
 class QtPlainTextLoggingHandler(logging.Handler):
@@ -538,8 +546,23 @@ class guiMain(QMainWindow):
         device.setMaximumWidth(300)
         ind = len(self.device_widgets)
         self.device_widgets.append(device)
-        self._layout_devices.insertWidget(ind,device)        
+        self._layout_devices.insertWidget(ind,device)
+
+
+    def _rem_device(self,port=None):
+        """
         
+        Closes and removes a deviceWidget
+        
+        """
+        funcname = '_rem_device()'
+        logger.debug(funcname)        
+        for dev in self.device_widgets:
+            if(dev.serial['port'] == port):
+                logger.debug(funcname + 'Found device to remove')
+                dev.close()
+                self.device_widgets.remove(dev)                
+                
         
     def _log_widget(self):
         """

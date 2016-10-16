@@ -581,6 +581,8 @@ class nmea0183logger(object):
         
         serial['streams'].append(sendstream)
         print('Hallo',serial['streams'])
+
+
         
     def publish_devices(self):
         """
@@ -602,12 +604,22 @@ class nmea0183logger(object):
 
         funcname = 'rem_device()'
         self.logger.debug(funcname)        
-        serial = self.serial[ind]
-        serial['thread_queue'].send('stop')
-        if(serial['device'] == serial.Serial):
+        serialdevice = self.serial[ind]
+        if(self.pymqdatastream != None):
+            self.logger.debug(funcname + ': Removing datastreams')
+            for s in serialdevice['streams']:
+                self.pymqdatastream.rem_stream(s)        
+        serialdevice['thread_queue'].put('stop')
+        if(serialdevice['device'] == serial.Serial):
             self.logger.debug(funcname + ': Stopping a serial device')
+            serialdevice['device'].close()
         else:
             self.logger.debug(funcname + ': Unknown device type')
+
+        print(self.serial)    
+        self.serial.pop(ind)
+        print(self.serial)            
+        
             
 
         
