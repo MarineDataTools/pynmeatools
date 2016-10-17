@@ -549,19 +549,24 @@ class guiMain(QMainWindow):
         self._layout_devices.insertWidget(ind,device)
 
 
-    def _rem_device(self,port=None):
+    def _rem_device(self,port=None,device=None):
         """
         
         Closes and removes a deviceWidget
         
         """
         funcname = '_rem_device()'
-        logger.debug(funcname)        
-        for dev in self.device_widgets:
-            if(dev.serial['port'] == port):
-                logger.debug(funcname + 'Found device to remove')
-                dev.close()
-                self.device_widgets.remove(dev)                
+        logger.debug(funcname)
+        if(port != None):
+            for dev in self.device_widgets:
+                if(dev.serial['port'] == port):
+                    logger.debug(funcname + 'Found device to remove')
+                    dev.close()
+                    self.device_widgets.remove(dev)
+
+        elif(device != None):
+            device.close()
+            self.device_widgets.remove(device)
                 
         
     def _log_widget(self):
@@ -595,7 +600,8 @@ class guiMain(QMainWindow):
     def _clicked_datastream_subscribe(self):
         self._datastreamsubscribe = datastream_qt_service.DataStreamSubscribeWidget(self.nmea0183logger.pymqdatastream, hide_myself=True, stream_type = 'pubstream')
         self._datastreamsubscribe.signal_newstream.append(self.nmea0183logger.add_pymqdsStream)
-        self._datastreamsubscribe.signal_newstream.append(self._new_pymqdsStream)        
+        self._datastreamsubscribe.signal_newstream.append(self._new_pymqdsStream)
+        self._datastreamsubscribe.signal_remstream.append(self._rem_pymqdsStream)        
         self._datastreamsubscribe.show()
 
 
@@ -605,13 +611,28 @@ class guiMain(QMainWindow):
         """
         funcname = '_new_pymqdsStream()'        
         logger.debug(funcname)
-        ind_serial = len(self.nmea0183logger.serial) - 1        
+        # The last serial is a datastream as before this function
+        # self.nmea0183logger.add_pymqdsStream has been called        
+        ind_serial = len(self.nmea0183logger.serial) - 1
         dV = deviceWidget(ind_device = ind_serial,parent_gui = self)
         dV.setStyleSheet(device_style)
         # The signal seems to be connected here, otherwise it does not work ...
         dV.update_ident_widgets.connect(dV._update_identifier_widgets)
         self._add_device(dV)
-        self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)        
+        self.nmea0183logger.serial[-1]['data_signals'].append(dV._new_data)
+
+    def _rem_pymqdsStream(self,stream):
+        """
+        Removes the infrastructure for a pymqds Stream
+        """
+        funcname = '_rem_pymqdsStream()'        
+        logger.debug(funcname)
+        for dV in self.device_widgets:
+            if(stream == dV.serial['device']):
+                logger.debug(funcname + ': Found a matching stream to remove')
+                self._rem_device(device=dV)
+                return
+            
         
 
 
