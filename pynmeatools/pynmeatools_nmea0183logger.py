@@ -281,7 +281,7 @@ class nmea0183logger(object):
 
         # Query remote datastreams
         self.logger.debug(funcname + ': querying')
-        remote_datastreams = self.pymqdatastream.query_datastreams()
+        remote_datastreams = self.pymqdatastream.query_datastreams(address)
         self.logger.debug(funcname + ':' + str(remote_datastreams))
         for s in remote_datastreams:
             print(s.name)
@@ -550,7 +550,7 @@ class nmea0183logger(object):
         funcname = 'create_pymqdatastream()'
         # Import pymqdatastream here
         self.logger.debug(funcname + ': Creating DataStream')
-        datastream = pymqdatastream.DataStream(name=self.name,logging_level=self.loglevel)
+        datastream = pymqdatastream.DataStream(address=address, name=self.name,logging_level=self.loglevel)
         self.pymqdatastream = datastream
             
             
@@ -635,7 +635,7 @@ def main():
     serial_help = 'Serial device to read data from in unixoid OSes e.g. /dev/ttyACM0'
     interval_help = 'Time interval at which new files are created (in seconds)'
     datastream_help = 'Connect to a nmea0183logger published with pymqdatastream'
-    publish_datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network'
+    publish_datastream_help = 'Create a pymqdatastream Datastream to publish the data over a network, no argument take standard address, otherwise specify zeromq compatible address e.g. tcp://192.168.178.10'
     raw_data_datastream_help = 'Print raw NMEA data of all devices to the console'                                
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--log_stream', '-l')
@@ -645,7 +645,7 @@ def main():
     parser.add_argument('--port', '-p')
     parser.add_argument('--interval', '-i', default=0, type=int, help=interval_help)        
     parser.add_argument('--verbose', '-v', action='count')
-    parser.add_argument('--publish_datastream', '-pd', action='store_true', help=publish_datastream_help)
+    parser.add_argument('--publish_datastream', '-pd', nargs = '?', default = False, help=publish_datastream_help)
     parser.add_argument('--datastream', '-d', nargs = '?', default = False, help=datastream_help)
     parser.add_argument('--print_raw_data', '-r', action='store_true', help=raw_data_datastream_help)                                
     
@@ -698,11 +698,16 @@ def main():
     
     print('Args publish_datastream:',args.publish_datastream)
     # Create datastream? 
-    if(args.publish_datastream == True):
-        logger.debug('Creating a pymqdatastream Datastream')
-        s.create_pymqdatastream()
-        # TODO: add all devices, should be done in nmealogger via registering ..
-        s.publish_devices()
+    if(args.publish_datastream != False):
+        if(args.publish_datastream == None):        
+            logger.debug('Creating a pymqdatastream at standard address')
+            s.create_pymqdatastream()
+            s.publish_devices()
+        else:
+            logger.debug('Creating a pymqdatastream at address: ' + str(args.publish_datastream))
+            s.create_pymqdatastream(address = args.publish_datastream)
+            s.publish_devices()            
+            
 
 
     # Connect to datastream?
@@ -712,7 +717,9 @@ def main():
         if(args.datastream == None):
             logger.debug('Connecting to  pymqdatastream Datastream logger')
             s.add_datastream()
-        
+        else:
+            logger.debug('Connecting to pymqdatastream at address: ' + str(args.datastream))
+            s.add_datastream(args.datastream)            
 
         
 
